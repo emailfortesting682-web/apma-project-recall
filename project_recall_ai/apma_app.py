@@ -89,12 +89,17 @@ def inject_professional_theme():
         """
         <style>
         :root {
-            --apma-navy: #172033;
-            --apma-blue: #2563eb;
-            --apma-green: #0f766e;
-            --apma-border: #d8dee8;
-            --apma-muted: #667085;
-            --apma-bg: #f7f9fc;
+            --apma-ink: #10243f;
+            --apma-navy: #123761;
+            --apma-blue: #0067b1;
+            --apma-cyan: #27a8df;
+            --apma-steel: #edf2f7;
+            --apma-border: #cfd9e6;
+            --apma-muted: #5f7186;
+            --apma-bg: #f5f8fb;
+        }
+        html, body, [data-testid="stAppViewContainer"] {
+            background: var(--apma-bg);
         }
         .block-container {
             padding-top: 1.4rem;
@@ -102,23 +107,41 @@ def inject_professional_theme():
             max-width: 1280px;
         }
         h1, h2, h3 {
-            color: var(--apma-navy);
+            color: var(--apma-ink);
             letter-spacing: 0;
         }
         [data-testid="stSidebar"] {
-            background: #f3f6fb;
-            border-right: 1px solid var(--apma-border);
+            background: linear-gradient(180deg, #0f2c50 0%, #153d68 100%);
+            border-right: 1px solid #0b2441;
+        }
+        [data-testid="stSidebar"] * {
+            color: #f8fbff;
+        }
+        [data-testid="stSidebar"] .stRadio label,
+        [data-testid="stSidebar"] .stTextInput label {
+            color: #f8fbff !important;
+        }
+        [data-testid="stSidebar"] [data-baseweb="radio"] div {
+            color: #f8fbff;
+        }
+        [data-testid="stSidebar"] input {
+            background: #ffffff;
+            color: #10243f;
         }
         .apma-hero {
             border: 1px solid var(--apma-border);
-            background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+            border-top: 5px solid var(--apma-blue);
+            background:
+                linear-gradient(135deg, rgba(0, 103, 177, 0.10) 0%, rgba(39, 168, 223, 0.04) 42%, rgba(255, 255, 255, 1) 100%),
+                #ffffff;
             border-radius: 8px;
-            padding: 22px 24px;
+            padding: 24px 26px;
             margin-bottom: 18px;
+            box-shadow: 0 10px 30px rgba(16, 36, 63, 0.06);
         }
         .apma-title {
             margin: 0;
-            color: var(--apma-navy);
+            color: var(--apma-ink);
             font-size: 30px;
             line-height: 1.2;
             font-weight: 760;
@@ -130,19 +153,21 @@ def inject_professional_theme():
             line-height: 1.5;
         }
         .apma-help {
-            border-left: 4px solid var(--apma-blue);
-            background: #eef5ff;
+            border-left: 4px solid var(--apma-cyan);
+            background: #eaf6fc;
             padding: 12px 14px;
-            color: #1d2939;
+            color: var(--apma-ink);
             margin: 8px 0 18px 0;
             border-radius: 4px;
         }
         .apma-card {
             border: 1px solid var(--apma-border);
+            border-top: 4px solid var(--apma-blue);
             border-radius: 8px;
             background: #ffffff;
             padding: 16px 18px;
             min-height: 112px;
+            box-shadow: 0 6px 20px rgba(16, 36, 63, 0.05);
         }
         .apma-card-title {
             color: var(--apma-muted);
@@ -152,21 +177,37 @@ def inject_professional_theme():
             margin-bottom: 8px;
         }
         .apma-card-value {
-            color: var(--apma-navy);
+            color: var(--apma-blue);
             font-size: 28px;
             font-weight: 760;
         }
         .apma-workflow {
             border: 1px solid var(--apma-border);
+            border-left: 4px solid var(--apma-blue);
             border-radius: 8px;
             padding: 14px 16px;
             background: #ffffff;
             margin-bottom: 10px;
+            box-shadow: 0 4px 16px rgba(16, 36, 63, 0.04);
         }
         .stButton > button,
         .stDownloadButton > button {
             border-radius: 6px;
             font-weight: 650;
+            border: 1px solid var(--apma-blue);
+            color: var(--apma-blue);
+        }
+        .stButton > button:hover,
+        .stDownloadButton > button:hover {
+            border-color: var(--apma-cyan);
+            color: var(--apma-ink);
+            background: #edf8fd;
+        }
+        [data-testid="stMetric"] {
+            background: #ffffff;
+            border: 1px solid var(--apma-border);
+            border-radius: 8px;
+            padding: 14px 16px;
         }
         </style>
         """,
@@ -178,6 +219,7 @@ def page_header(title: str, description: str):
     st.markdown(
         f"""
         <div class="apma-hero">
+            <div class="apma-card-title">Operational knowledge system</div>
             <div class="apma-title">{title}</div>
             <p class="apma-subtitle">{description}</p>
         </div>
@@ -381,6 +423,31 @@ mode = st.sidebar.radio(
 
 
 if mode == "Dashboard":
+    if not st.session_state.get("user"):
+        page_header(
+            "Welcome to APMA",
+            "AI Project Memory Assistant helps teams store project problems, solutions, and lessons learned in a searchable knowledge base.",
+        )
+        guidance("Please log in from the sidebar to access your project memory workspace.")
+
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            metric_card("Capture", "Upload", "Import CSV or Excel project records")
+        with c2:
+            metric_card("Recall", "Search", "Find similar historical cases with AI")
+        with c3:
+            metric_card("Report", "Export", "Generate summaries and client-ready reports")
+
+        st.markdown("### How APMA supports your workflow")
+        public_steps = [
+            ("Centralize project knowledge", "Store recurring problems, adopted solutions, and lessons learned in one place."),
+            ("Search by meaning", "Ask natural-language questions and retrieve relevant historical records."),
+            ("Turn results into reports", "Export tables and AI-generated summaries for review or client communication."),
+        ]
+        for title, body in public_steps:
+            st.markdown(f'<div class="apma-workflow"><strong>{title}</strong><br>{body}</div>', unsafe_allow_html=True)
+        st.stop()
+
     page_header(
         "Project Memory Dashboard",
         "A clear starting point for reviewing system status, saved memories, and the next recommended actions.",
