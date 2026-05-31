@@ -89,125 +89,115 @@ def inject_professional_theme():
         """
         <style>
         :root {
-            --apma-ink: #10243f;
-            --apma-navy: #123761;
-            --apma-blue: #0067b1;
-            --apma-cyan: #27a8df;
-            --apma-steel: #edf2f7;
-            --apma-border: #cfd9e6;
-            --apma-muted: #5f7186;
-            --apma-bg: #f5f8fb;
+            --apma-ink: #1d1d1f;
+            --apma-blue: #0071e3;
+            --apma-blue-soft: #e8f2ff;
+            --apma-border: #d2d2d7;
+            --apma-muted: #6e6e73;
+            --apma-bg: #f5f5f7;
         }
         html, body, [data-testid="stAppViewContainer"] {
             background: var(--apma-bg);
+            color: var(--apma-ink);
         }
         .block-container {
-            padding-top: 1.4rem;
+            padding-top: 1.7rem;
             padding-bottom: 3rem;
-            max-width: 1280px;
+            max-width: 1180px;
         }
         h1, h2, h3 {
             color: var(--apma-ink);
             letter-spacing: 0;
         }
         [data-testid="stSidebar"] {
-            background: linear-gradient(180deg, #0f2c50 0%, #153d68 100%);
-            border-right: 1px solid #0b2441;
-        }
-        [data-testid="stSidebar"] * {
-            color: #f8fbff;
-        }
-        [data-testid="stSidebar"] .stRadio label,
-        [data-testid="stSidebar"] .stTextInput label {
-            color: #f8fbff !important;
-        }
-        [data-testid="stSidebar"] [data-baseweb="radio"] div {
-            color: #f8fbff;
-        }
-        [data-testid="stSidebar"] input {
-            background: #ffffff;
-            color: #10243f;
+            background: rgba(251, 251, 253, 0.94);
+            border-right: 1px solid #e5e5ea;
+            backdrop-filter: blur(18px);
         }
         .apma-hero {
-            border: 1px solid var(--apma-border);
-            border-top: 5px solid var(--apma-blue);
-            background:
-                linear-gradient(135deg, rgba(0, 103, 177, 0.10) 0%, rgba(39, 168, 223, 0.04) 42%, rgba(255, 255, 255, 1) 100%),
-                #ffffff;
-            border-radius: 8px;
-            padding: 24px 26px;
-            margin-bottom: 18px;
-            box-shadow: 0 10px 30px rgba(16, 36, 63, 0.06);
+            border: 0;
+            background: #ffffff;
+            border-radius: 22px;
+            padding: 34px 36px;
+            margin-bottom: 22px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.04);
         }
         .apma-title {
             margin: 0;
             color: var(--apma-ink);
-            font-size: 30px;
-            line-height: 1.2;
-            font-weight: 760;
+            font-size: 42px;
+            line-height: 1.08;
+            font-weight: 700;
         }
         .apma-subtitle {
-            margin: 8px 0 0 0;
+            margin: 10px 0 0 0;
             color: var(--apma-muted);
-            font-size: 15px;
-            line-height: 1.5;
+            font-size: 17px;
+            line-height: 1.45;
+            max-width: 780px;
         }
         .apma-help {
-            border-left: 4px solid var(--apma-cyan);
-            background: #eaf6fc;
-            padding: 12px 14px;
-            color: var(--apma-ink);
-            margin: 8px 0 18px 0;
-            border-radius: 4px;
+            border: 0;
+            background: var(--apma-blue-soft);
+            padding: 14px 16px;
+            color: #1d3557;
+            margin: 8px 0 20px 0;
+            border-radius: 14px;
+            line-height: 1.45;
         }
         .apma-card {
-            border: 1px solid var(--apma-border);
-            border-top: 4px solid var(--apma-blue);
-            border-radius: 8px;
+            border: 0;
+            border-radius: 18px;
             background: #ffffff;
-            padding: 16px 18px;
-            min-height: 112px;
-            box-shadow: 0 6px 20px rgba(16, 36, 63, 0.05);
+            padding: 22px 22px;
+            min-height: 126px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.04);
         }
         .apma-card-title {
             color: var(--apma-muted);
-            font-size: 13px;
-            font-weight: 650;
-            text-transform: uppercase;
-            margin-bottom: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: none;
+            margin-bottom: 10px;
         }
         .apma-card-value {
-            color: var(--apma-blue);
-            font-size: 28px;
-            font-weight: 760;
+            color: var(--apma-ink);
+            font-size: 32px;
+            font-weight: 700;
+            letter-spacing: 0;
         }
         .apma-workflow {
-            border: 1px solid var(--apma-border);
-            border-left: 4px solid var(--apma-blue);
-            border-radius: 8px;
-            padding: 14px 16px;
+            border: 0;
+            border-radius: 18px;
+            padding: 18px 20px;
             background: #ffffff;
-            margin-bottom: 10px;
-            box-shadow: 0 4px 16px rgba(16, 36, 63, 0.04);
+            margin-bottom: 12px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+            color: var(--apma-ink);
         }
         .stButton > button,
         .stDownloadButton > button {
-            border-radius: 6px;
-            font-weight: 650;
-            border: 1px solid var(--apma-blue);
-            color: var(--apma-blue);
+            border-radius: 999px;
+            font-weight: 600;
+            border: 1px solid transparent;
+            background: var(--apma-blue);
+            color: #ffffff;
+            padding: 0.48rem 1.05rem;
         }
         .stButton > button:hover,
         .stDownloadButton > button:hover {
-            border-color: var(--apma-cyan);
-            color: var(--apma-ink);
-            background: #edf8fd;
+            background: #147ce5;
+            color: #ffffff;
+            border-color: transparent;
         }
-        [data-testid="stMetric"] {
-            background: #ffffff;
-            border: 1px solid var(--apma-border);
-            border-radius: 8px;
-            padding: 14px 16px;
+        div[data-baseweb="input"],
+        div[data-baseweb="select"] > div,
+        textarea {
+            border-radius: 12px !important;
+        }
+        .stDataFrame {
+            border-radius: 16px;
+            overflow: hidden;
         }
         </style>
         """,
@@ -219,7 +209,6 @@ def page_header(title: str, description: str):
     st.markdown(
         f"""
         <div class="apma-hero">
-            <div class="apma-card-title">Operational knowledge system</div>
             <div class="apma-title">{title}</div>
             <p class="apma-subtitle">{description}</p>
         </div>
