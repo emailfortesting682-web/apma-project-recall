@@ -1,6 +1,6 @@
 import pandas as pd
 from io import BytesIO
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import A4, landscape
 from reportlab.pdfgen import canvas
 from docx import Document
 
@@ -34,8 +34,8 @@ def export_excel(df: pd.DataFrame, summary: str) -> bytes:
 # ===============================
 def export_pdf(df: pd.DataFrame, summary: str) -> bytes:
     buffer = BytesIO()
-    c = canvas.Canvas(buffer, pagesize=A4)
-    width, height = A4
+    c = canvas.Canvas(buffer, pagesize=landscape(A4))
+    width, height = landscape(A4)
 
     y = height - 40
     c.setFont("Helvetica-Bold", 14)
@@ -50,15 +50,28 @@ def export_pdf(df: pd.DataFrame, summary: str) -> bytes:
             c.showPage()
             y = height - 40
 
+    if df.empty:
+        c.save()
+        return buffer.getvalue()
+
     c.showPage()
     y = height - 40
     c.setFont("Helvetica-Bold", 12)
-    c.drawString(40, y, "Results Table")
+    c.drawString(40, y, "Results")
     y -= 20
-
     c.setFont("Helvetica", 8)
-    for _, row in df.head(40).iterrows():  # safety limit
-        row_text = " | ".join(str(v)[:30] for v in row.values)
+
+    display_cols = list(df.columns[:8])
+    if len(df.columns) > len(display_cols):
+        c.drawString(40, y, f"Showing first {len(display_cols)} of {len(df.columns)} columns for PDF readability.")
+        y -= 14
+
+    header = " | ".join(display_cols)
+    c.drawString(40, y, header[:150])
+    y -= 14
+
+    for _, row in df.head(40).iterrows():
+        row_text = " | ".join(str(row.get(col, ""))[:28] for col in display_cols)
         c.drawString(40, y, row_text)
         y -= 12
         if y < 40:
@@ -76,11 +89,33 @@ def export_word(df: pd.DataFrame, summary: str) -> bytes:
     doc = Document()
     doc.add_heading("AI Query Summary", level=1)
 
-    for line in summary.split("\n"):
-        doc.add_paragraph(line)
+    if summary.strip():
+        for line in summary.split("\n"):
+            doc.add_paragraph(line)
+    else:
+        doc.add_paragraph("No AI summary was generated for this report.")
+
+    if df.empty:
+        buffer = BytesIO()
+        doc.save(buffer)
+        return buffer.getvalue()
 
     doc.add_heading("Results Table", level=2)
-    table = doc.add_table(rows=1, cols=len(df.columns))
+
+    if len(df.columns) > 8:
+        doc.add_paragraph(
+            f"The result contains {len(df.columns)} columns. Records are shown as field lists for readability."
+        )
+        for idx, row in df.head(40).iterrows():
+            doc.add_heading(f"Record {idx + 1}", level=3)
+            for col, val in row.items():
+                doc.add_paragraph(f"{col}: {val}")
+        buffer = BytesIO()
+        doc.save(buffer)
+        return buffer.getvalue()
+
+    table = doc.add_table(rows=1, cols=max(len(df.columns), 1))
+    table.style = "Table Grid"
     hdrs = table.rows[0].cells
 
     for i, col in enumerate(df.columns):

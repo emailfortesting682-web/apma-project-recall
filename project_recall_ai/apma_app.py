@@ -1,4 +1,5 @@
 import os
+from io import BytesIO
 from datetime import date
 
 import pandas as pd
@@ -208,6 +209,32 @@ def require_login():
         st.stop()
 
 
+def get_secret_value(name: str, default: str = "") -> str:
+    try:
+        return st.secrets.get(name, os.getenv(name, default))
+    except Exception:
+        return os.getenv(name, default)
+
+
+def is_admin_user() -> bool:
+    user = st.session_state.get("user")
+    if not user:
+        return False
+    raw_admin_ids = get_secret_value("APMA_ADMIN_IDS", "")
+    if not raw_admin_ids.strip():
+        return True
+    admin_ids = {item.strip() for item in raw_admin_ids.split(",") if item.strip()}
+    return user.get("id") in admin_ids
+
+
+def require_admin():
+    require_login()
+    if not is_admin_user():
+        st.error("Settings are restricted to administrators.")
+        st.info("Ask the app owner to add your ID to APMA_ADMIN_IDS in Streamlit secrets.")
+        st.stop()
+
+
 def memory_record_count(mem_manager, memory_id: str) -> int:
     try:
         return len(mem_manager.load_memory_dataframe(memory_id))
@@ -222,13 +249,42 @@ def save_memory_with_embeddings(mem_manager, emb_engine, name: str, df: pd.DataF
     return meta
 
 
+def sample_template_dataframe() -> pd.DataFrame:
+    return pd.DataFrame([{col: "" for col in REQUIRED_COLS}])
+
+
+def excel_bytes(df: pd.DataFrame) -> bytes:
+    buffer = BytesIO()
+    with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
+        df.to_excel(writer, sheet_name="APMA Template", index=False)
+    return buffer.getvalue()
+
+
+def clear_search_state():
+    for key in ["last_result_df", "last_summary", "last_query", "last_result_memory"]:
+        st.session_state.pop(key, None)
+
+
+def go_to(page: str):
+    st.session_state["workspace_nav"] = page
+    rerun()
+
+
 def render_download_panel(df: pd.DataFrame, summary: str):
     st.markdown("### Export report")
     guidance("Choose whether the client needs the raw result table, the AI summary, or a complete report.")
 
+    has_summary = bool(str(summary).strip())
+    report_options = ["Only Table Results", "Full Report (Table + Summary)"]
+    if has_summary:
+        report_options.insert(1, "Only Summary Report")
+
+    if not has_summary:
+        st.info("No AI summary is available for this result, so summary-only export is hidden.")
+
     download_type = st.radio(
         "Report contents",
-        ["Only Table Results", "Only Summary Report", "Full Report (Table + Summary)"],
+        report_options,
         horizontal=True,
         help="Controls which parts of the current search result are included in the exported file.",
     )
@@ -345,6 +401,7 @@ st.sidebar.divider()
 mode = st.sidebar.radio(
     "Workspace",
     ["Dashboard", "Data Upload", "Manual Entry", "Search & Insights", "Settings"],
+    key="workspace_nav",
     help="Follow the workflow from status review to data capture, search, reporting, and configuration.",
 )
 
@@ -379,12 +436,27 @@ if mode == "Dashboard":
     for title, body in steps:
         st.markdown(f'<div class="apma-workflow"><strong>{title}</strong><br>{body}</div>', unsafe_allow_html=True)
 
+    st.markdown("### Quick actions")
+    qa1, qa2, qa3 = st.columns(3)
+    with qa1:
+        if st.button("Upload project file", help="Go to the bulk CSV/Excel upload workflow."):
+            go_to("Data Upload")
+    with qa2:
+        if st.button("Add manual record", help="Go to the manual lesson-learned entry workflow."):
+            go_to("Manual Entry")
+    with qa3:
+        if st.button("Search memories", help="Go to semantic search and reporting."):
+            go_to("Search & Insights")
+
     st.markdown("### Existing memories")
     if memories:
         rows = [{"Memory": mem, "Records": memory_record_count(mem_manager, mem)} for mem in memories]
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
     else:
-        guidance("No memories found yet. Start with Data Upload or Manual Entry to create the first project memory.")
+        if st.session_state.get("user"):
+            guidance("No memories found yet. Use Upload project file or Add manual record to create the first project memory.")
+        else:
+            guidance("Log in from the sidebar to create and search project memories.")
 
 
 elif mode == "Data Upload":
@@ -394,6 +466,29 @@ elif mode == "Data Upload":
     )
     require_login()
     guidance("Use this page for bulk import. The file must contain the required project columns before it can be saved.")
+
+    template_df = sample_template_dataframe()
+    dl1, dl2 = st.columns(2)
+    with dl1:
+        st.download_button(
+            "Download CSV template",
+            template_df.to_csv(index=False).encode("utf-8"),
+            "apma_upload_template.csv",
+            "text/csv",
+            help="Download a blank CSV with the exact columns required by APMA.",
+        )
+    with dl2:
+        st.download_button(
+            "Download Excel template",
+            excel_bytes(template_df),
+            "apma_upload_template.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            help="Download a blank Excel template with the exact columns required by APMA.",
+        )
+
+    with st.expander("Required upload columns", expanded=False):
+        st.write("Your CSV or Excel file must include these columns:")
+        st.dataframe(pd.DataFrame({"Required column": REQUIRED_COLS}), hide_index=True, use_container_width=True)
 
     uploaded = st.file_uploader(
         "Upload CSV or Excel file",
@@ -477,29 +572,60 @@ elif mode == "Manual Entry":
         else:
             st.warning("No existing memories are available yet.")
 
-    with st.form("manual_dynamic"):
-        cols = st.columns(3)
-        col_idx = 0
+    def render_manual_field(field: str):
+        meta = config[field]
+        key = f"manual_{field}"
+        help_text = f"Enter the value for {field}. This field is included in saved project memory."
+        if meta["type"] == "text":
+            if meta.get("multiline"):
+                manual_data[field] = st.text_area(field, key=key, help=help_text, height=120)
+            else:
+                manual_data[field] = st.text_input(field, key=key, help=help_text)
+        elif meta["type"] == "select":
+            manual_data[field] = st.selectbox(field, meta.get("options", []), key=key, help=help_text)
+        elif meta["type"] == "date":
+            if meta.get("mode") == "year":
+                y = st.selectbox(field, list(range(2000, date.today().year + 1)), key=key, help=help_text)
+                manual_data[field] = str(y)
+            else:
+                d = st.date_input(field, key=key, help=help_text)
+                manual_data[field] = d.isoformat()
 
-        for field, meta in config.items():
-            key = f"manual_{field}"
-            help_text = f"Enter the value for {field}. This field is included in saved project memory."
-            with cols[col_idx]:
-                if meta["type"] == "text":
-                    if meta.get("multiline"):
-                        manual_data[field] = st.text_area(field, key=key, help=help_text)
-                    else:
-                        manual_data[field] = st.text_input(field, key=key, help=help_text)
-                elif meta["type"] == "select":
-                    manual_data[field] = st.selectbox(field, meta.get("options", []), key=key, help=help_text)
-                elif meta["type"] == "date":
-                    if meta.get("mode") == "year":
-                        y = st.selectbox(field, list(range(2000, date.today().year + 1)), key=key, help=help_text)
-                        manual_data[field] = str(y)
-                    else:
-                        d = st.date_input(field, key=key, help=help_text)
-                        manual_data[field] = d.isoformat()
-            col_idx = (col_idx + 1) % 3
+    project_fields = ["COMMESSA", "CLIENTE", "ANNO", "TIPO MACCHINA", "APPLICAZIONE", "TIPO PROBLEMA"]
+    detail_fields = ["DESCRIZIONE", "SOLUZIONE LESSON LEARNED"]
+    report_fields = [
+        "DATA INSERIMENTO",
+        "RCPRD",
+        "REPORT CANTIERE",
+        "CONCERNED DEPARTMENTS",
+        "REPORT RIUNIONE CHIUSURA PROGETTO",
+    ]
+    known_fields = set(project_fields + detail_fields + report_fields)
+    extra_fields = [field for field in config if field not in known_fields]
+
+    with st.form("manual_dynamic"):
+        st.markdown("#### Project information")
+        cols = st.columns(3)
+        for idx, field in enumerate([f for f in project_fields if f in config]):
+            with cols[idx % 3]:
+                render_manual_field(field)
+
+        st.markdown("#### Problem and lesson learned")
+        for field in [f for f in detail_fields if f in config]:
+            render_manual_field(field)
+
+        st.markdown("#### Reports and ownership")
+        cols = st.columns(2)
+        for idx, field in enumerate([f for f in report_fields if f in config]):
+            with cols[idx % 2]:
+                render_manual_field(field)
+
+        if extra_fields:
+            st.markdown("#### Additional fields")
+            cols = st.columns(2)
+            for idx, field in enumerate(extra_fields):
+                with cols[idx % 2]:
+                    render_manual_field(field)
 
         submitted = st.form_submit_button("Add row", help="Add this manual record to the pending review table.")
 
@@ -541,6 +667,7 @@ elif mode == "Search & Insights":
         "Search & Insights",
         "Search historical project memories, review matching records, generate an AI summary, and export reports.",
     )
+    require_login()
     guidance("Use semantic search for natural-language questions. Use structured filters when you know the exact field to inspect.")
 
     templates = load_templates()
@@ -560,6 +687,11 @@ elif mode == "Search & Insights":
             key="query_summary_template",
             help="Controls how the AI summary is structured.",
         )
+
+    context = (mem, summary_template_name)
+    if st.session_state.get("last_search_context") != context:
+        clear_search_state()
+        st.session_state["last_search_context"] = context
 
     search_tab, filter_tab = st.tabs(["AI Semantic Search", "Structured Filter Search"])
 
@@ -600,6 +732,7 @@ elif mode == "Search & Insights":
             st.session_state["last_result_df"] = res
             st.session_state["last_summary"] = answer
             st.session_state["last_query"] = q
+            st.session_state["last_result_memory"] = mem
 
     with filter_tab:
         filterable_columns = {
@@ -619,6 +752,7 @@ elif mode == "Search & Insights":
             df = recall_engine.filter_memory(mem, filterable_columns[col], val, exact)
             st.session_state["last_result_df"] = df
             st.session_state["last_summary"] = ""
+            st.session_state["last_result_memory"] = mem
             st.info(f"{len(df)} records found.")
 
     if "last_result_df" in st.session_state:
@@ -640,7 +774,10 @@ elif mode == "Settings":
         "Settings",
         "Configure manual-entry fields, summary templates, and deployment readiness from one administration area.",
     )
-    require_login()
+    require_admin()
+
+    if not get_secret_value("APMA_ADMIN_IDS", "").strip():
+        st.info("Admin ID restriction is not configured yet. Add APMA_ADMIN_IDS to Streamlit secrets to limit Settings access.")
 
     fields_tab, templates_tab, system_tab = st.tabs(["Manual fields", "Summary templates", "System status"])
 
