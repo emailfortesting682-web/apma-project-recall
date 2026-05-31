@@ -89,111 +89,113 @@ def inject_professional_theme():
         """
         <style>
         :root {
-            --apma-ink: #1d1d1f;
-            --apma-blue: #0071e3;
-            --apma-blue-soft: #e8f2ff;
-            --apma-border: #d2d2d7;
-            --apma-muted: #6e6e73;
-            --apma-bg: #f5f5f7;
+            --apma-ink: #050505;
+            --apma-blue: #0866ff;
+            --apma-blue-hover: #075ce5;
+            --apma-blue-soft: #e7f3ff;
+            --apma-border: #dddfe2;
+            --apma-muted: #65676b;
+            --apma-bg: #f0f2f5;
         }
         html, body, [data-testid="stAppViewContainer"] {
             background: var(--apma-bg);
             color: var(--apma-ink);
         }
         .block-container {
-            padding-top: 1.7rem;
+            padding-top: 1.2rem;
             padding-bottom: 3rem;
-            max-width: 1180px;
+            max-width: 1120px;
         }
         h1, h2, h3 {
             color: var(--apma-ink);
             letter-spacing: 0;
         }
         [data-testid="stSidebar"] {
-            background: rgba(251, 251, 253, 0.94);
-            border-right: 1px solid #e5e5ea;
-            backdrop-filter: blur(18px);
+            background: #ffffff;
+            border-right: 1px solid var(--apma-border);
         }
         .apma-hero {
             border: 0;
             background: #ffffff;
-            border-radius: 22px;
-            padding: 34px 36px;
-            margin-bottom: 22px;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+            border-radius: 10px;
+            padding: 18px 20px;
+            margin-bottom: 14px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.12);
         }
         .apma-title {
             margin: 0;
             color: var(--apma-ink);
-            font-size: 42px;
-            line-height: 1.08;
+            font-size: 26px;
+            line-height: 1.18;
             font-weight: 700;
         }
         .apma-subtitle {
-            margin: 10px 0 0 0;
+            margin: 6px 0 0 0;
             color: var(--apma-muted);
-            font-size: 17px;
-            line-height: 1.45;
-            max-width: 780px;
+            font-size: 14px;
+            line-height: 1.35;
+            max-width: 720px;
         }
         .apma-help {
             border: 0;
             background: var(--apma-blue-soft);
-            padding: 14px 16px;
-            color: #1d3557;
-            margin: 8px 0 20px 0;
-            border-radius: 14px;
-            line-height: 1.45;
+            padding: 10px 12px;
+            color: #1c2b33;
+            margin: 6px 0 12px 0;
+            border-radius: 8px;
+            line-height: 1.35;
+            font-size: 14px;
         }
         .apma-card {
             border: 0;
-            border-radius: 18px;
+            border-radius: 10px;
             background: #ffffff;
-            padding: 22px 22px;
-            min-height: 126px;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+            padding: 14px 16px;
+            min-height: 96px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.12);
         }
         .apma-card-title {
             color: var(--apma-muted);
             font-size: 12px;
             font-weight: 600;
             text-transform: none;
-            margin-bottom: 10px;
+            margin-bottom: 6px;
         }
         .apma-card-value {
             color: var(--apma-ink);
-            font-size: 32px;
+            font-size: 24px;
             font-weight: 700;
             letter-spacing: 0;
         }
         .apma-workflow {
             border: 0;
-            border-radius: 18px;
-            padding: 18px 20px;
+            border-radius: 10px;
+            padding: 13px 15px;
             background: #ffffff;
-            margin-bottom: 12px;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+            margin-bottom: 8px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.12);
             color: var(--apma-ink);
+            font-size: 14px;
         }
         .stButton > button,
         .stDownloadButton > button {
-            border-radius: 999px;
+            border-radius: 8px;
             font-weight: 600;
             border: 1px solid transparent;
             background: var(--apma-blue);
             color: #ffffff;
-            padding: 0.48rem 1.05rem;
+            padding: 0.42rem 0.9rem;
         }
         .stButton > button:hover,
         .stDownloadButton > button:hover {
-            background: #147ce5;
+            background: var(--apma-blue-hover);
             color: #ffffff;
             border-color: transparent;
         }
         div[data-baseweb="input"],
         div[data-baseweb="select"] > div,
         textarea {
-            border-radius: 12px !important;
+            border-radius: 8px !important;
         }
         .stDataFrame {
             border-radius: 16px;
@@ -218,7 +220,8 @@ def page_header(title: str, description: str):
 
 
 def guidance(text: str):
-    st.markdown(f'<div class="apma-help">{text}</div>', unsafe_allow_html=True)
+    with st.expander("Need help?", expanded=False):
+        st.write(text)
 
 
 def metric_card(title: str, value: str, note: str):
@@ -415,9 +418,9 @@ if mode == "Dashboard":
     if not st.session_state.get("user"):
         page_header(
             "Welcome to APMA",
-            "AI Project Memory Assistant helps teams store project problems, solutions, and lessons learned in a searchable knowledge base.",
+            "Project memory, search, and reports in one workspace.",
         )
-        guidance("Please log in from the sidebar to access your project memory workspace.")
+        st.info("Log in from the sidebar to continue.")
 
         c1, c2, c3 = st.columns(3)
         with c1:
@@ -427,11 +430,11 @@ if mode == "Dashboard":
         with c3:
             metric_card("Report", "Export", "Generate summaries and client-ready reports")
 
-        st.markdown("### How APMA supports your workflow")
+        st.markdown("### Workflow")
         public_steps = [
-            ("Centralize project knowledge", "Store recurring problems, adopted solutions, and lessons learned in one place."),
-            ("Search by meaning", "Ask natural-language questions and retrieve relevant historical records."),
-            ("Turn results into reports", "Export tables and AI-generated summaries for review or client communication."),
+            ("Centralize", "Store problems, solutions, and lessons learned."),
+            ("Search", "Find similar historical records."),
+            ("Report", "Export summaries and tables."),
         ]
         for title, body in public_steps:
             st.markdown(f'<div class="apma-workflow"><strong>{title}</strong><br>{body}</div>', unsafe_allow_html=True)
@@ -439,7 +442,7 @@ if mode == "Dashboard":
 
     page_header(
         "Project Memory Dashboard",
-        "A clear starting point for reviewing system status, saved memories, and the next recommended actions.",
+        "Status, shortcuts, and saved memories.",
     )
 
     memories = mem_manager.list_memories()
@@ -456,12 +459,12 @@ if mode == "Dashboard":
         storage = "Supabase" if getattr(mem_manager, "use_supabase", False) else "Local"
         metric_card("Storage", storage, "Current persistence backend")
 
-    st.markdown("### Recommended workflow")
+    st.markdown("### Workflow")
     steps = [
-        ("1. Add project data", "Use Data Upload for CSV/Excel files or Manual Entry for individual lessons learned."),
-        ("2. Validate and save memory", "Create a new memory or append records to an existing memory."),
-        ("3. Search and summarize", "Use Search & Insights to retrieve similar historical cases and generate a report."),
-        ("4. Configure when needed", "Use Settings to adjust manual fields and summary templates."),
+        ("1. Add data", "Upload a file or enter records manually."),
+        ("2. Save memory", "Create or append a searchable memory."),
+        ("3. Search", "Find matches and generate a report."),
+        ("4. Configure", "Adjust fields and summary templates."),
     ]
     for title, body in steps:
         st.markdown(f'<div class="apma-workflow"><strong>{title}</strong><br>{body}</div>', unsafe_allow_html=True)
@@ -492,7 +495,7 @@ if mode == "Dashboard":
 elif mode == "Data Upload":
     page_header(
         "Data Upload",
-        "Import CSV or Excel project records, validate the required schema, and save them into a searchable memory.",
+        "Import files and save searchable project memory.",
     )
     require_login()
     guidance("Use this page for bulk import. The file must contain the required project columns before it can be saved.")
@@ -577,7 +580,7 @@ elif mode == "Data Upload":
 elif mode == "Manual Entry":
     page_header(
         "Manual Entry",
-        "Capture individual project lessons learned when a complete upload file is not available.",
+        "Add individual lessons learned.",
     )
     require_login()
     guidance("Add one or more rows to the pending list, review them, then save the batch to a memory.")
@@ -695,7 +698,7 @@ elif mode == "Manual Entry":
 elif mode == "Search & Insights":
     page_header(
         "Search & Insights",
-        "Search historical project memories, review matching records, generate an AI summary, and export reports.",
+        "Find similar records and export reports.",
     )
     require_login()
     guidance("Use semantic search for natural-language questions. Use structured filters when you know the exact field to inspect.")
@@ -802,7 +805,7 @@ elif mode == "Search & Insights":
 elif mode == "Settings":
     page_header(
         "Settings",
-        "Configure manual-entry fields, summary templates, and deployment readiness from one administration area.",
+        "Configure fields, summaries, and system status.",
     )
     require_login()
 
