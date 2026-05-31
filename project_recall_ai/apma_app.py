@@ -209,32 +209,6 @@ def require_login():
         st.stop()
 
 
-def get_secret_value(name: str, default: str = "") -> str:
-    try:
-        return st.secrets.get(name, os.getenv(name, default))
-    except Exception:
-        return os.getenv(name, default)
-
-
-def is_admin_user() -> bool:
-    user = st.session_state.get("user")
-    if not user:
-        return False
-    raw_admin_ids = get_secret_value("APMA_ADMIN_IDS", "")
-    if not raw_admin_ids.strip():
-        return True
-    admin_ids = {item.strip() for item in raw_admin_ids.split(",") if item.strip()}
-    return user.get("id") in admin_ids
-
-
-def require_admin():
-    require_login()
-    if not is_admin_user():
-        st.error("Settings are restricted to administrators.")
-        st.info("Ask the app owner to add your ID to APMA_ADMIN_IDS in Streamlit secrets.")
-        st.stop()
-
-
 def memory_record_count(mem_manager, memory_id: str) -> int:
     try:
         return len(mem_manager.load_memory_dataframe(memory_id))
@@ -774,10 +748,7 @@ elif mode == "Settings":
         "Settings",
         "Configure manual-entry fields, summary templates, and deployment readiness from one administration area.",
     )
-    require_admin()
-
-    if not get_secret_value("APMA_ADMIN_IDS", "").strip():
-        st.info("Admin ID restriction is not configured yet. Add APMA_ADMIN_IDS to Streamlit secrets to limit Settings access.")
+    require_login()
 
     fields_tab, templates_tab, system_tab = st.tabs(["Manual fields", "Summary templates", "System status"])
 
