@@ -89,45 +89,59 @@ def inject_professional_theme():
         """
         <style>
         :root {
-            --apma-ink: #050505;
-            --apma-blue: #0866ff;
-            --apma-blue-hover: #075ce5;
-            --apma-blue-soft: #e7f3ff;
-            --apma-border: #dddfe2;
-            --apma-muted: #65676b;
-            --apma-bg: #f0f2f5;
+            --apma-ink: #242424;
+            --apma-blue: #0078d4;
+            --apma-blue-hover: #106ebe;
+            --apma-blue-soft: #eff6fc;
+            --apma-border: #e1dfdd;
+            --apma-muted: #605e5c;
+            --apma-bg: #f3f2f1;
+            --apma-panel: #ffffff;
+            --apma-nav: #faf9f8;
         }
         html, body, [data-testid="stAppViewContainer"] {
             background: var(--apma-bg);
             color: var(--apma-ink);
+            font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
         }
         .block-container {
-            padding-top: 1.2rem;
+            padding-top: 1.15rem;
             padding-bottom: 3rem;
-            max-width: 1120px;
+            max-width: 1200px;
         }
         h1, h2, h3 {
             color: var(--apma-ink);
             letter-spacing: 0;
+            font-family: "Segoe UI", system-ui, sans-serif;
         }
         [data-testid="stSidebar"] {
-            background: #ffffff;
+            background: var(--apma-nav);
             border-right: 1px solid var(--apma-border);
         }
+        [data-testid="stSidebar"] h2,
+        [data-testid="stSidebar"] h3,
+        [data-testid="stSidebar"] p,
+        [data-testid="stSidebar"] label,
+        [data-testid="stSidebar"] span {
+            color: var(--apma-ink);
+        }
         .apma-hero {
-            border: 0;
-            background: #ffffff;
-            border-radius: 10px;
-            padding: 18px 20px;
-            margin-bottom: 14px;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.12);
+            border: 1px solid var(--apma-border);
+            background: var(--apma-panel);
+            border-radius: 4px;
+            padding: 20px 22px;
+            margin-bottom: 16px;
+            box-shadow: 0 1.6px 3.6px rgba(0,0,0,0.08), 0 0.3px 0.9px rgba(0,0,0,0.04);
+            display: flex;
+            gap: 14px;
+            align-items: center;
         }
         .apma-title {
             margin: 0;
             color: var(--apma-ink);
-            font-size: 26px;
-            line-height: 1.18;
-            font-weight: 700;
+            font-size: 28px;
+            line-height: 1.2;
+            font-weight: 600;
         }
         .apma-subtitle {
             margin: 6px 0 0 0;
@@ -147,12 +161,13 @@ def inject_professional_theme():
             font-size: 14px;
         }
         .apma-card {
-            border: 0;
-            border-radius: 10px;
-            background: #ffffff;
-            padding: 14px 16px;
-            min-height: 96px;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.12);
+            border: 1px solid var(--apma-border);
+            border-left: 4px solid var(--apma-blue);
+            border-radius: 4px;
+            background: var(--apma-panel);
+            padding: 15px 16px;
+            min-height: 98px;
+            box-shadow: 0 1.6px 3.6px rgba(0,0,0,0.08), 0 0.3px 0.9px rgba(0,0,0,0.04);
         }
         .apma-card-title {
             color: var(--apma-muted);
@@ -164,27 +179,57 @@ def inject_professional_theme():
         .apma-card-value {
             color: var(--apma-ink);
             font-size: 24px;
-            font-weight: 700;
+            font-weight: 600;
             letter-spacing: 0;
         }
         .apma-workflow {
-            border: 0;
-            border-radius: 10px;
+            border: 1px solid var(--apma-border);
+            border-radius: 4px;
             padding: 13px 15px;
-            background: #ffffff;
+            background: var(--apma-panel);
             margin-bottom: 8px;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.12);
+            box-shadow: 0 0.3px 0.9px rgba(0,0,0,0.04);
             color: var(--apma-ink);
             font-size: 14px;
         }
+        .apma-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 0 0 12px 0;
+        }
+        .apma-mark {
+            display: grid;
+            grid-template-columns: repeat(2, 13px);
+            grid-template-rows: repeat(2, 13px);
+            gap: 3px;
+            flex: 0 0 auto;
+        }
+        .apma-mark span {
+            display: block;
+            border-radius: 2px;
+        }
+        .apma-mark span:nth-child(1) { background: #0078d4; }
+        .apma-mark span:nth-child(2) { background: #50e6ff; }
+        .apma-mark span:nth-child(3) { background: #107c10; }
+        .apma-mark span:nth-child(4) { background: #8764b8; }
+        .apma-brand-name {
+            font-weight: 600;
+            color: var(--apma-ink);
+            line-height: 1.1;
+        }
+        .apma-brand-sub {
+            color: var(--apma-muted);
+            font-size: 12px;
+        }
         .stButton > button,
         .stDownloadButton > button {
-            border-radius: 8px;
+            border-radius: 2px;
             font-weight: 600;
             border: 1px solid transparent;
             background: var(--apma-blue);
             color: #ffffff;
-            padding: 0.42rem 0.9rem;
+            padding: 0.42rem 0.95rem;
         }
         .stButton > button:hover,
         .stDownloadButton > button:hover {
@@ -192,14 +237,44 @@ def inject_professional_theme():
             color: #ffffff;
             border-color: transparent;
         }
+        .stTextInput input,
+        .stTextArea textarea,
+        .stNumberInput input {
+            background: #ffffff !important;
+            color: var(--apma-ink) !important;
+            border: 1px solid #8a8886 !important;
+        }
+        .stTextInput input:focus,
+        .stTextArea textarea:focus,
+        .stNumberInput input:focus {
+            border-color: var(--apma-blue) !important;
+            box-shadow: 0 0 0 1px var(--apma-blue) !important;
+        }
+        [data-baseweb="select"] > div {
+            background: #ffffff !important;
+            color: var(--apma-ink) !important;
+            border-color: #8a8886 !important;
+        }
+        [data-baseweb="radio"] {
+            color: var(--apma-ink) !important;
+        }
         div[data-baseweb="input"],
         div[data-baseweb="select"] > div,
         textarea {
-            border-radius: 8px !important;
+            border-radius: 2px !important;
         }
         .stDataFrame {
-            border-radius: 16px;
+            border-radius: 4px;
             overflow: hidden;
+            border: 1px solid var(--apma-border);
+        }
+        [data-testid="stExpander"] {
+            border: 1px solid var(--apma-border);
+            border-radius: 4px;
+            background: #ffffff;
+        }
+        [data-testid="stAlert"] {
+            border-radius: 4px;
         }
         </style>
         """,
@@ -211,8 +286,11 @@ def page_header(title: str, description: str):
     st.markdown(
         f"""
         <div class="apma-hero">
-            <div class="apma-title">{title}</div>
-            <p class="apma-subtitle">{description}</p>
+            <div class="apma-mark" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+            <div>
+                <div class="apma-title">{title}</div>
+                <p class="apma-subtitle">{description}</p>
+            </div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -369,8 +447,18 @@ recall_engine = RecallEngine(
 
 
 # Sidebar authentication and navigation
-st.sidebar.markdown("## APMA")
-st.sidebar.caption("AI Project Memory Assistant")
+st.sidebar.markdown(
+    """
+    <div class="apma-brand">
+        <div class="apma-mark" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+        <div>
+            <div class="apma-brand-name">APMA</div>
+            <div class="apma-brand-sub">Project Memory</div>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 st.sidebar.divider()
 
 if st.session_state["user"] is None:
