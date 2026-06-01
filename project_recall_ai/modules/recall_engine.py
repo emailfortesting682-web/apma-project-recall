@@ -2,6 +2,7 @@
 
 import os
 import json
+import re
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -52,6 +53,25 @@ def _row_text(row, columns=None):
         if val and val.lower() != "nan":
             parts.append(f"{col}: {val}")
     return " | ".join(parts)
+
+
+def _tokens(text):
+    return [tok for tok in re.findall(r"[a-zA-Z0-9]+", str(text).lower()) if len(tok) > 1]
+
+
+def _minmax(values):
+    if not values:
+        return {}
+    nums = list(values.values())
+    lo = min(nums)
+    hi = max(nums)
+    if hi == lo:
+        return {key: 1.0 for key in values}
+    return {key: (val - lo) / (hi - lo) for key, val in values.items()}
+
+
+def _rrf(rank, k=60):
+    return 1.0 / (k + rank)
 
 
 # =====================================================
@@ -274,6 +294,161 @@ class RecallEngine:
             rec = row.to_dict()
             rec.update(r.to_dict())
             rec["Citation"] = f"R{len(out_rows) + 1}"
+            out_rows.append(rec)
+
+        return pd.DataFrame(out_rows)
+
+    # -------------------------------------------------
+    def _semantic_scores(self, df, query, search_columns=None):
+        if not self.emb_engine:
+            return {}
+
+        valid_cols = [col for col in (search_columns or []) if col in df.columns]
+        row_ids = list(df.index)
+
+        if valid_cols:
+            texts = [_row_text(row, valid_cols) for _, row in df.iterrows()]
+            usable = [(idx, text) for idx, text in zip(row_ids, texts) if text]
+            if not usable:
+                return {}
+            row_ids = [idx for idx, _ in usable]
+            embeddings = self.emb_engine.embed_texts([text for _, text in usable])
+        else:
+            return None
+
+        q_emb = self.emb_engine.embed_texts([query])[0]
+        return {
+            df_idx: _cosine_similarity(q_emb, emb)
+            for df_idx, emb in zip(row_ids, embeddings)
+        }
+
+    def _semantic_scores_from_index(self, mem_id, df, query):
+        if not self.emb_engine:
+            return {}
+        payload = self._load_embeddings(mem_id)
+        if payload is None:
+            return {}
+        q_emb = self.emb_engine.embed_texts([query])[0]
+        return {
+            df_idx: _cosine_similarity(q_emb, emb)
+            for df_idx, emb in zip(payload["row_ids"], payload["embeddings"])
+        }
+
+    def _lexical_scores(self, df, query, search_columns=None):
+        query_tokens = set(_tokens(query))
+        if not query_tokens:
+            return {}
+        valid_cols = [col for col in (search_columns or df.columns) if col in df.columns]
+        scores = {}
+        for idx, row in df.iterrows():
+            text = _row_text(row, valid_cols)
+            row_tokens = set(_tokens(text))
+            if not row_tokens:
+                continue
+            overlap = len(query_tokens & row_tokens)
+            phrase_bonus = 1.0 if str(query).lower() in text.lower() else 0.0
+            fuzzy = fuzz.partial_ratio(str(query).lower(), text.lower()) / 100
+            scores[idx] = (overlap / max(len(query_tokens), 1)) + phrase_bonus + (0.35 * fuzzy)
+        return scores
+
+    def _structured_scores(self, df, query, search_columns=None):
+        q = str(query).lower().strip()
+        if not q:
+            return {}
+        valid_cols = [col for col in (search_columns or df.columns) if col in df.columns]
+        scores = {}
+        for idx, row in df.iterrows():
+            best = 0.0
+            for col in valid_cols:
+                val = str(row.get(col, "")).lower().strip()
+                if not val:
+                    continue
+                if q == val:
+                    best = max(best, 1.0)
+                elif q in val:
+                    best = max(best, 0.85)
+                else:
+                    best = max(best, fuzz.partial_ratio(q, val) / 100 * 0.65)
+            if best > 0:
+                scores[idx] = best
+        return scores
+
+    def _rank_map(self, scores):
+        ordered = sorted(scores.items(), key=lambda item: item[1], reverse=True)
+        return {idx: rank + 1 for rank, (idx, _) in enumerate(ordered)}
+
+    def hybrid_query_memory(
+        self,
+        mem_id,
+        query,
+        search_columns=None,
+        top_k=10,
+        semantic_weight=0.45,
+        lexical_weight=0.30,
+        structured_weight=0.25,
+    ):
+        df = self.mem_manager.load_memory_dataframe(mem_id)
+        if df is None or df.empty:
+            return pd.DataFrame()
+
+        valid_cols = [col for col in (search_columns or df.columns) if col in df.columns]
+        q_text = self._correct_spelling(query)
+
+        semantic_scores = (
+            self._semantic_scores(df, q_text, valid_cols)
+            if search_columns else self._semantic_scores_from_index(mem_id, df, q_text)
+        )
+        lexical_scores = self._lexical_scores(df, q_text, valid_cols)
+        structured_scores = self._structured_scores(df, q_text, valid_cols)
+
+        semantic_norm = _minmax(semantic_scores)
+        lexical_norm = _minmax(lexical_scores)
+        structured_norm = _minmax(structured_scores)
+
+        semantic_ranks = self._rank_map(semantic_scores)
+        lexical_ranks = self._rank_map(lexical_scores)
+        structured_ranks = self._rank_map(structured_scores)
+
+        candidates = set(semantic_scores) | set(lexical_scores) | set(structured_scores)
+        scored = []
+        for idx in candidates:
+            weighted_score = (
+                semantic_weight * semantic_norm.get(idx, 0)
+                + lexical_weight * lexical_norm.get(idx, 0)
+                + structured_weight * structured_norm.get(idx, 0)
+            )
+            fusion_score = (
+                _rrf(semantic_ranks[idx]) if idx in semantic_ranks else 0
+            ) + (
+                _rrf(lexical_ranks[idx]) if idx in lexical_ranks else 0
+            ) + (
+                _rrf(structured_ranks[idx]) if idx in structured_ranks else 0
+            )
+            scored.append({
+                "df_idx": idx,
+                "SemanticScore": round(float(semantic_scores.get(idx, 0)), 4),
+                "LexicalScore": round(float(lexical_scores.get(idx, 0)), 4),
+                "StructuredScore": round(float(structured_scores.get(idx, 0)), 4),
+                "HybridScore": round(float(weighted_score + fusion_score), 4),
+                "RetrievalSignals": ", ".join([
+                    name for name, scores in [
+                        ("semantic", semantic_scores),
+                        ("keyword", lexical_scores),
+                        ("column", structured_scores),
+                    ] if idx in scores
+                ]),
+            })
+
+        if not scored:
+            return pd.DataFrame()
+
+        scored_df = pd.DataFrame(scored).sort_values("HybridScore", ascending=False).head(top_k)
+        out_rows = []
+        for citation_idx, (_, score_row) in enumerate(scored_df.iterrows(), start=1):
+            row = df.loc[score_row["df_idx"]]
+            rec = row.to_dict()
+            rec.update(score_row.to_dict())
+            rec["Citation"] = f"R{citation_idx}"
             out_rows.append(rec)
 
         return pd.DataFrame(out_rows)

@@ -1070,7 +1070,7 @@ elif mode == "Search & Insights":
         clear_search_state()
         st.session_state["last_search_context"] = context
 
-    search_tab, filter_tab = st.tabs(["AI Semantic Search", "Structured Filter Search"])
+    search_tab, filter_tab = st.tabs(["Hybrid Search", "Structured Filter Search"])
 
     with search_tab:
         if mem == "All memories":
@@ -1091,7 +1091,20 @@ elif mode == "Search & Insights":
             help="Describe the issue in natural language. The app finds similar historical records.",
         )
 
-        if st.button("Search memory", help="Run AI semantic search and generate a summary."):
+        top_k = st.slider(
+            "Results",
+            min_value=3,
+            max_value=20,
+            value=10,
+            help="Choose how many top-ranked hybrid results should be used.",
+        )
+
+        with st.expander("Retrieval balance", expanded=False):
+            semantic_weight = st.slider("Meaning match", 0.0, 1.0, 0.45, 0.05)
+            lexical_weight = st.slider("Keyword match", 0.0, 1.0, 0.30, 0.05)
+            structured_weight = st.slider("Column/exact match", 0.0, 1.0, 0.25, 0.05)
+
+        if st.button("Search memory", help="Run hybrid retrieval and generate a grounded summary."):
             if not emb_engine:
                 st.error("Embeddings engine is not available. Check OPENAI_API_KEY in Streamlit secrets.")
                 st.stop()
@@ -1103,13 +1116,31 @@ elif mode == "Search & Insights":
                 if mem == "All memories":
                     frames = []
                     for item in mems:
-                        item_res = recall_engine.query_memory(item, q, search_columns=search_scope or None)
+                        item_res = recall_engine.hybrid_query_memory(
+                            item,
+                            q,
+                            search_columns=search_scope or None,
+                            top_k=top_k,
+                            semantic_weight=semantic_weight,
+                            lexical_weight=lexical_weight,
+                            structured_weight=structured_weight,
+                        )
                         if not item_res.empty:
                             item_res["Memory"] = item
                             frames.append(item_res)
                     res = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+                    if not res.empty:
+                        res = res.sort_values("HybridScore", ascending=False).head(top_k).reset_index(drop=True)
                 else:
-                    res = recall_engine.query_memory(mem, q, search_columns=search_scope or None)
+                    res = recall_engine.hybrid_query_memory(
+                        mem,
+                        q,
+                        search_columns=search_scope or None,
+                        top_k=top_k,
+                        semantic_weight=semantic_weight,
+                        lexical_weight=lexical_weight,
+                        structured_weight=structured_weight,
+                    )
             except FileNotFoundError:
                 st.error("Embeddings were not found for this memory. Re-save or re-upload the memory to rebuild them.")
                 st.stop()
