@@ -387,6 +387,12 @@ def inject_professional_theme():
         [data-testid="stAlert"] {
             border-radius: 10px;
         }
+        .apma-search-status {
+            color: var(--apma-muted);
+            font-size: 15px;
+            line-height: 1.4;
+            padding: 6px 0;
+        }
         @media (max-width: 900px) {
             .apma-hero {
                 flex-direction: column;
@@ -441,6 +447,10 @@ def page_header(title: str, description: str):
 def guidance(text: str):
     with st.expander("Need help?", expanded=False):
         st.write(text)
+
+
+def set_search_status(container, text: str):
+    container.markdown(f'<div class="apma-search-status">{text}</div>', unsafe_allow_html=True)
 
 
 def metric_card(title: str, value: str, note: str):
@@ -1232,7 +1242,7 @@ elif mode == "Search & Insights":
                 st.stop()
 
             status_box = st.empty()
-            status_box.info("Looking into data...")
+            set_search_status(status_box, "Looking into data...")
             try:
                 if mem == "All memories":
                     frames = []
@@ -1276,7 +1286,7 @@ elif mode == "Search & Insights":
 
             res["Citation"] = [f"R{i + 1}" for i in range(len(res))]
 
-            status_box.info("Thinking...")
+            set_search_status(status_box, "Thinking...")
             insights = recall_engine.generate_structured_insights(res)
             template = templates[summary_template_name]
             answer = recall_engine.generate_llm_summary(
@@ -1286,7 +1296,7 @@ elif mode == "Search & Insights":
                 instructions=template.get("instructions", ""),
                 result_rows=res,
             )
-            status_box.success("Done.")
+            set_search_status(status_box, "Done.")
 
             st.session_state["last_result_df"] = res
             st.session_state["last_summary"] = answer
