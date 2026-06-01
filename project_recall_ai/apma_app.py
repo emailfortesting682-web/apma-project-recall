@@ -401,6 +401,25 @@ def export_json(df: pd.DataFrame, summary: str) -> bytes:
     return json.dumps(payload, indent=2, ensure_ascii=False).encode("utf-8")
 
 
+def run_hybrid_query(engine, memory_name, query, search_columns, top_k, semantic_weight, lexical_weight, structured_weight):
+    if hasattr(engine, "hybrid_query_memory"):
+        return engine.hybrid_query_memory(
+            memory_name,
+            query,
+            search_columns=search_columns,
+            top_k=top_k,
+            semantic_weight=semantic_weight,
+            lexical_weight=lexical_weight,
+            structured_weight=structured_weight,
+        )
+    return engine.query_memory(
+        memory_name,
+        query,
+        search_columns=search_columns,
+        hard_limit=top_k,
+    )
+
+
 def read_uploaded_flexible(uploaded_file):
     uploaded_file.seek(0)
     name = uploaded_file.name.lower()
@@ -684,7 +703,7 @@ if mode == "Dashboard":
     st.markdown("### Existing memories")
     if memories:
         rows = [{"Memory": mem, "Records": memory_record_count(mem_manager, mem)} for mem in memories]
-        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
         export_mem = st.selectbox(
             "Export memory",
             memories,
@@ -768,7 +787,7 @@ elif mode == "Data Upload":
             ])
 
             st.markdown("### Detected column headers")
-            st.dataframe(pd.DataFrame({"Detected column": detected_cols}), hide_index=True, use_container_width=True)
+            st.dataframe(pd.DataFrame({"Detected column": detected_cols}), hide_index=True, width="stretch")
 
             use_first_row = st.radio(
                 "Should the first row be treated as column headers?",
@@ -810,7 +829,7 @@ elif mode == "Data Upload":
                 "Consistent column names improve data quality, retrieval accuracy, and knowledge organization."
             )
             st.markdown("### Import preview")
-            st.dataframe(preview_df.head(20), use_container_width=True)
+            st.dataframe(preview_df.head(20), width="stretch")
 
             if st.button("Create memory", help="Save this file and register these columns as the official memory structure."):
                 if not mem_name:
@@ -850,9 +869,9 @@ elif mode == "Data Upload":
             ])
 
             st.markdown("### Detected upload columns")
-            st.dataframe(pd.DataFrame({"Detected column": detected_cols}), hide_index=True, use_container_width=True)
+            st.dataframe(pd.DataFrame({"Detected column": detected_cols}), hide_index=True, width="stretch")
             with st.expander("Saved memory structure", expanded=False):
-                st.dataframe(pd.DataFrame({"Expected column": schema_cols}), hide_index=True, use_container_width=True)
+                st.dataframe(pd.DataFrame({"Expected column": schema_cols}), hide_index=True, width="stretch")
 
             use_first_row = st.radio(
                 "Should the first row be treated as column headers?",
@@ -890,7 +909,7 @@ elif mode == "Data Upload":
                 append_df = upload_df[schema_cols].copy()
 
             st.markdown("### Append preview")
-            st.dataframe(append_df.head(20), use_container_width=True)
+            st.dataframe(append_df.head(20), width="stretch")
 
             allowed_user_ids = mem_manager.get_memory_metadata(mem_name).get("allowed_user_ids", ["*"])
             if st.button("Append to memory", help="Append these rows using the memory's registered structure."):
@@ -1005,7 +1024,7 @@ elif mode == "Manual Entry":
     if st.session_state.get("manual_rows"):
         st.markdown("### Pending manual entries")
         pending_df = pd.DataFrame(st.session_state["manual_rows"])
-        st.dataframe(pending_df, use_container_width=True)
+        st.dataframe(pending_df, width="stretch")
 
         c1, c2 = st.columns([1, 1])
         with c1:
@@ -1116,14 +1135,15 @@ elif mode == "Search & Insights":
                 if mem == "All memories":
                     frames = []
                     for item in mems:
-                        item_res = recall_engine.hybrid_query_memory(
+                        item_res = run_hybrid_query(
+                            recall_engine,
                             item,
                             q,
-                            search_columns=search_scope or None,
-                            top_k=top_k,
-                            semantic_weight=semantic_weight,
-                            lexical_weight=lexical_weight,
-                            structured_weight=structured_weight,
+                            search_scope or None,
+                            top_k,
+                            semantic_weight,
+                            lexical_weight,
+                            structured_weight,
                         )
                         if not item_res.empty:
                             item_res["Memory"] = item
@@ -1132,14 +1152,15 @@ elif mode == "Search & Insights":
                     if not res.empty:
                         res = res.sort_values("HybridScore", ascending=False).head(top_k).reset_index(drop=True)
                 else:
-                    res = recall_engine.hybrid_query_memory(
+                    res = run_hybrid_query(
+                        recall_engine,
                         mem,
                         q,
-                        search_columns=search_scope or None,
-                        top_k=top_k,
-                        semantic_weight=semantic_weight,
-                        lexical_weight=lexical_weight,
-                        structured_weight=structured_weight,
+                        search_scope or None,
+                        top_k,
+                        semantic_weight,
+                        lexical_weight,
+                        structured_weight,
                     )
             except FileNotFoundError:
                 st.error("Embeddings were not found for this memory. Re-save or re-upload the memory to rebuild them.")
@@ -1202,7 +1223,7 @@ elif mode == "Search & Insights":
         summary = st.session_state.get("last_summary", "")
 
         st.markdown("### Results")
-        st.dataframe(df, use_container_width=True)
+        st.dataframe(df, width="stretch")
 
         if summary:
             st.markdown("### Analysis summary")
@@ -1437,7 +1458,7 @@ elif mode == "Settings":
                             for col, details in schema.items()
                         ]),
                         hide_index=True,
-                        use_container_width=True,
+                        width="stretch",
                     )
                 else:
                     st.info("No schema information stored yet. Save new records to refresh the structure.")
@@ -1445,6 +1466,7 @@ elif mode == "Settings":
             with st.expander("History", expanded=False):
                 audit_log = meta.get("audit_log") or []
                 if audit_log:
-                    st.dataframe(pd.DataFrame(audit_log), hide_index=True, use_container_width=True)
+                    st.dataframe(pd.DataFrame(audit_log), hide_index=True, width="stretch")
                 else:
                     st.info("No history is available yet.")
+
