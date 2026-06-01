@@ -1232,17 +1232,15 @@ elif mode == "Search & Insights":
                 st.stop()
 
             status_box = st.empty()
-            progress_bar = st.progress(0)
 
             with st.spinner("Looking into data..."):
                 status_box.info("Looking into data...")
-                progress_bar.progress(20)
                 try:
                     if mem == "All memories":
                         frames = []
                         total_mems = max(len(mems), 1)
                         for idx, item in enumerate(mems, start=1):
-                            status_box.info(f"Looking into data... ({idx}/{total_mems})")
+                            status_box.info("Looking into data...")
                             item_res = run_hybrid_query(
                                 recall_engine,
                                 item,
@@ -1253,7 +1251,6 @@ elif mode == "Search & Insights":
                                 lexical_weight,
                                 structured_weight,
                             )
-                            progress_bar.progress(min(65, 20 + int((idx / total_mems) * 45)))
                             if not item_res.empty:
                                 item_res["Memory"] = item
                                 frames.append(item_res)
@@ -1271,15 +1268,12 @@ elif mode == "Search & Insights":
                             lexical_weight,
                             structured_weight,
                         )
-                        progress_bar.progress(65)
                 except FileNotFoundError:
-                    progress_bar.empty()
                     status_box.empty()
                     st.error("Embeddings were not found for this memory. Re-save or re-upload the memory to rebuild them.")
                     st.stop()
 
             if res.empty:
-                progress_bar.empty()
                 status_box.empty()
                 st.info("No matching results found.")
                 st.stop()
@@ -1287,7 +1281,6 @@ elif mode == "Search & Insights":
             res["Citation"] = [f"R{i + 1}" for i in range(len(res))]
 
             status_box.info("Thinking...")
-            progress_bar.progress(82)
             with st.spinner("Thinking..."):
                 insights = recall_engine.generate_structured_insights(res)
                 template = templates[summary_template_name]
@@ -1298,7 +1291,6 @@ elif mode == "Search & Insights":
                     instructions=template.get("instructions", ""),
                     result_rows=res,
                 )
-            progress_bar.progress(100)
             status_box.success("Done.")
 
             st.session_state["last_result_df"] = res
