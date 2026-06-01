@@ -1232,35 +1232,14 @@ elif mode == "Search & Insights":
                 st.stop()
 
             status_box = st.empty()
-
-            with st.spinner("Looking into data..."):
-                status_box.info("Looking into data...")
-                try:
-                    if mem == "All memories":
-                        frames = []
-                        total_mems = max(len(mems), 1)
-                        for idx, item in enumerate(mems, start=1):
-                            status_box.info("Looking into data...")
-                            item_res = run_hybrid_query(
-                                recall_engine,
-                                item,
-                                q,
-                                search_scope or None,
-                                top_k,
-                                semantic_weight,
-                                lexical_weight,
-                                structured_weight,
-                            )
-                            if not item_res.empty:
-                                item_res["Memory"] = item
-                                frames.append(item_res)
-                        res = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
-                        if not res.empty:
-                            res = res.sort_values("HybridScore", ascending=False).head(top_k).reset_index(drop=True)
-                    else:
-                        res = run_hybrid_query(
+            status_box.info("Looking into data...")
+            try:
+                if mem == "All memories":
+                    frames = []
+                    for item in mems:
+                        item_res = run_hybrid_query(
                             recall_engine,
-                            mem,
+                            item,
                             q,
                             search_scope or None,
                             top_k,
@@ -1268,10 +1247,27 @@ elif mode == "Search & Insights":
                             lexical_weight,
                             structured_weight,
                         )
-                except FileNotFoundError:
-                    status_box.empty()
-                    st.error("Embeddings were not found for this memory. Re-save or re-upload the memory to rebuild them.")
-                    st.stop()
+                        if not item_res.empty:
+                            item_res["Memory"] = item
+                            frames.append(item_res)
+                    res = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+                    if not res.empty:
+                        res = res.sort_values("HybridScore", ascending=False).head(top_k).reset_index(drop=True)
+                else:
+                    res = run_hybrid_query(
+                        recall_engine,
+                        mem,
+                        q,
+                        search_scope or None,
+                        top_k,
+                        semantic_weight,
+                        lexical_weight,
+                        structured_weight,
+                    )
+            except FileNotFoundError:
+                status_box.empty()
+                st.error("Embeddings were not found for this memory. Re-save or re-upload the memory to rebuild them.")
+                st.stop()
 
             if res.empty:
                 status_box.empty()
@@ -1281,16 +1277,15 @@ elif mode == "Search & Insights":
             res["Citation"] = [f"R{i + 1}" for i in range(len(res))]
 
             status_box.info("Thinking...")
-            with st.spinner("Thinking..."):
-                insights = recall_engine.generate_structured_insights(res)
-                template = templates[summary_template_name]
-                answer = recall_engine.generate_llm_summary(
-                    insights=insights,
-                    query=q,
-                    template=template,
-                    instructions=template.get("instructions", ""),
-                    result_rows=res,
-                )
+            insights = recall_engine.generate_structured_insights(res)
+            template = templates[summary_template_name]
+            answer = recall_engine.generate_llm_summary(
+                insights=insights,
+                query=q,
+                template=template,
+                instructions=template.get("instructions", ""),
+                result_rows=res,
+            )
             status_box.success("Done.")
 
             st.session_state["last_result_df"] = res
