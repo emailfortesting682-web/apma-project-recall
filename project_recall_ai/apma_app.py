@@ -1,4 +1,5 @@
 import os
+import json
 from io import BytesIO
 from datetime import date
 
@@ -8,7 +9,7 @@ from streamlit import rerun
 
 from modules import user_manager
 from modules.data_handler import DataHandler
-from modules.download_utils import export_csv, export_excel, export_json, export_pdf, export_word
+from modules.download_utils import export_csv, export_excel, export_pdf, export_word
 from modules.embeddings_engine import EmbeddingsEngine
 from modules.file_manager import MemoryManager
 from modules.manual_config import load_config, save_config
@@ -390,6 +391,14 @@ def excel_bytes(df: pd.DataFrame) -> bytes:
     with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
         df.to_excel(writer, sheet_name="APMA Template", index=False)
     return buffer.getvalue()
+
+
+def export_json(df: pd.DataFrame, summary: str) -> bytes:
+    payload = {
+        "summary": summary,
+        "records": df.fillna("").to_dict(orient="records"),
+    }
+    return json.dumps(payload, indent=2, ensure_ascii=False).encode("utf-8")
 
 
 def read_uploaded_flexible(uploaded_file):
