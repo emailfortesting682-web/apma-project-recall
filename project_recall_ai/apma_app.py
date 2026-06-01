@@ -130,13 +130,13 @@ def inject_professional_theme():
         """
         <style>
         :root {
-            --apma-ink: #242424;
-            --apma-blue: #0078d4;
-            --apma-blue-hover: #106ebe;
-            --apma-blue-soft: #eff6fc;
-            --apma-border: #e1dfdd;
-            --apma-muted: #605e5c;
-            --apma-bg: #f3f2f1;
+            --apma-ink: #111827;
+            --apma-blue: #0f4bd8;
+            --apma-blue-hover: #0b3bb5;
+            --apma-blue-soft: #eaf3ff;
+            --apma-border: #e5e7eb;
+            --apma-muted: #4b5563;
+            --apma-bg: #f4f4f4;
             --apma-panel: #ffffff;
             --apma-nav: #faf9f8;
         }
@@ -146,9 +146,9 @@ def inject_professional_theme():
             font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
         }
         .block-container {
-            padding-top: 1.15rem;
+            padding-top: 1.35rem;
             padding-bottom: 3rem;
-            max-width: 1200px;
+            max-width: 1240px;
         }
         h1, h2, h3 {
             color: var(--apma-ink);
@@ -167,30 +167,100 @@ def inject_professional_theme():
             color: var(--apma-ink);
         }
         .apma-hero {
-            border: 1px solid var(--apma-border);
-            background: var(--apma-panel);
-            border-radius: 4px;
-            padding: 20px 22px;
-            margin-bottom: 16px;
-            box-shadow: 0 1.6px 3.6px rgba(0,0,0,0.08), 0 0.3px 0.9px rgba(0,0,0,0.04);
+            border: 0;
+            background: #ffffff;
+            border-radius: 18px;
+            padding: 0;
+            margin-bottom: 22px;
+            box-shadow: 0 4px 18px rgba(15, 23, 42, 0.08);
             display: flex;
-            gap: 14px;
-            align-items: center;
+            align-items: stretch;
+            justify-content: space-between;
+            overflow: hidden;
+            min-height: 250px;
+        }
+        .apma-hero-copy {
+            padding: 42px 48px;
+            flex: 1 1 auto;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            min-width: 0;
         }
         .apma-title {
             margin: 0;
             color: var(--apma-ink);
-            font-size: 28px;
-            line-height: 1.2;
-            font-weight: 600;
+            font-size: 42px;
+            line-height: 1.12;
+            font-weight: 700;
+            max-width: 680px;
         }
         .apma-subtitle {
-            margin: 6px 0 0 0;
+            margin: 14px 0 0 0;
             color: var(--apma-muted);
-            font-size: 14px;
-            line-height: 1.35;
+            font-size: 18px;
+            line-height: 1.55;
             max-width: 720px;
         }
+        .apma-hero-art {
+            position: relative;
+            flex: 0 0 34%;
+            min-width: 300px;
+            background:
+                radial-gradient(circle at 28% 30%, rgba(255, 122, 89, 0.42), transparent 22%),
+                radial-gradient(circle at 70% 28%, rgba(80, 230, 255, 0.42), transparent 24%),
+                radial-gradient(circle at 46% 72%, rgba(128, 214, 122, 0.42), transparent 25%),
+                linear-gradient(135deg, #fff4e7 0%, #efe0ca 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        .apma-icon-cloud {
+            position: relative;
+            width: 310px;
+            height: 205px;
+        }
+        .apma-app-icon {
+            position: absolute;
+            width: 52px;
+            height: 52px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #ffffff;
+            font-weight: 750;
+            font-size: 20px;
+            box-shadow: 0 14px 24px rgba(17, 24, 39, 0.18);
+            transform: rotate(-6deg);
+        }
+        .apma-app-icon::after {
+            content: "";
+            position: absolute;
+            inset: 8px;
+            border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.26);
+        }
+        .apma-i1 { left: 10px; top: 62px; background: linear-gradient(135deg, #f25022, #ff8a00); }
+        .apma-i2 { left: 90px; top: 18px; background: linear-gradient(135deg, #7f39fb, #ff5ca8); }
+        .apma-i3 { left: 166px; top: 48px; background: linear-gradient(135deg, #0078d4, #50e6ff); transform: rotate(7deg); }
+        .apma-i4 { left: 234px; top: 22px; background: linear-gradient(135deg, #6264a7, #8b5cf6); }
+        .apma-i5 { left: 72px; top: 126px; background: linear-gradient(135deg, #0f6cbd, #3b82f6); transform: rotate(5deg); }
+        .apma-i6 { left: 154px; top: 135px; background: linear-gradient(135deg, #107c10, #80d67a); }
+        .apma-i7 { left: 238px; top: 116px; background: linear-gradient(135deg, #8764b8, #c084fc); transform: rotate(8deg); }
+        .apma-float {
+            position: absolute;
+            width: 70px;
+            height: 18px;
+            background: rgba(17, 24, 39, 0.08);
+            border-radius: 999px;
+            filter: blur(6px);
+        }
+        .apma-s1 { left: 5px; top: 123px; }
+        .apma-s2 { left: 92px; top: 84px; }
+        .apma-s3 { left: 170px; top: 108px; }
+        .apma-s4 { left: 236px; top: 80px; }
         .apma-help {
             border: 0;
             background: var(--apma-blue-soft);
@@ -203,12 +273,12 @@ def inject_professional_theme():
         }
         .apma-card {
             border: 1px solid var(--apma-border);
-            border-left: 4px solid var(--apma-blue);
-            border-radius: 4px;
+            border-top: 4px solid var(--apma-blue);
+            border-radius: 10px;
             background: var(--apma-panel);
-            padding: 15px 16px;
-            min-height: 98px;
-            box-shadow: 0 1.6px 3.6px rgba(0,0,0,0.08), 0 0.3px 0.9px rgba(0,0,0,0.04);
+            padding: 18px 18px;
+            min-height: 108px;
+            box-shadow: 0 2px 10px rgba(15, 23, 42, 0.06);
         }
         .apma-card-title {
             color: var(--apma-muted);
@@ -225,11 +295,11 @@ def inject_professional_theme():
         }
         .apma-workflow {
             border: 1px solid var(--apma-border);
-            border-radius: 4px;
-            padding: 13px 15px;
+            border-radius: 10px;
+            padding: 16px 18px;
             background: var(--apma-panel);
-            margin-bottom: 8px;
-            box-shadow: 0 0.3px 0.9px rgba(0,0,0,0.04);
+            margin-bottom: 10px;
+            box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
             color: var(--apma-ink);
             font-size: 14px;
         }
@@ -265,12 +335,12 @@ def inject_professional_theme():
         }
         .stButton > button,
         .stDownloadButton > button {
-            border-radius: 2px;
+            border-radius: 7px;
             font-weight: 600;
             border: 1px solid transparent;
-            background: var(--apma-blue);
+            background: #143bd6;
             color: #ffffff;
-            padding: 0.42rem 0.95rem;
+            padding: 0.52rem 1.05rem;
         }
         .stButton > button:hover,
         .stDownloadButton > button:hover {
@@ -311,11 +381,26 @@ def inject_professional_theme():
         }
         [data-testid="stExpander"] {
             border: 1px solid var(--apma-border);
-            border-radius: 4px;
+            border-radius: 10px;
             background: #ffffff;
         }
         [data-testid="stAlert"] {
-            border-radius: 4px;
+            border-radius: 10px;
+        }
+        @media (max-width: 900px) {
+            .apma-hero {
+                flex-direction: column;
+            }
+            .apma-hero-copy {
+                padding: 30px 28px;
+            }
+            .apma-hero-art {
+                min-width: 100%;
+                min-height: 210px;
+            }
+            .apma-title {
+                font-size: 34px;
+            }
         }
         </style>
         """,
@@ -327,10 +412,25 @@ def page_header(title: str, description: str):
     st.markdown(
         f"""
         <div class="apma-hero">
-            <div class="apma-mark" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
-            <div>
+            <div class="apma-hero-copy">
+                <div class="apma-mark" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
                 <div class="apma-title">{title}</div>
                 <p class="apma-subtitle">{description}</p>
+            </div>
+            <div class="apma-hero-art" aria-hidden="true">
+                <div class="apma-icon-cloud">
+                    <div class="apma-float apma-s1"></div>
+                    <div class="apma-float apma-s2"></div>
+                    <div class="apma-float apma-s3"></div>
+                    <div class="apma-float apma-s4"></div>
+                    <div class="apma-app-icon apma-i1">D</div>
+                    <div class="apma-app-icon apma-i2">A</div>
+                    <div class="apma-app-icon apma-i3">S</div>
+                    <div class="apma-app-icon apma-i4">N</div>
+                    <div class="apma-app-icon apma-i5">K</div>
+                    <div class="apma-app-icon apma-i6">X</div>
+                    <div class="apma-app-icon apma-i7">R</div>
+                </div>
             </div>
         </div>
         """,
