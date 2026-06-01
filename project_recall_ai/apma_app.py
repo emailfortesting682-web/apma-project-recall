@@ -405,8 +405,49 @@ def read_uploaded_flexible(uploaded_file):
     uploaded_file.seek(0)
     name = uploaded_file.name.lower()
     if name.endswith(".csv"):
-        return pd.read_csv(uploaded_file).fillna("").astype(str)
-    return pd.read_excel(uploaded_file).fillna("").astype(str)
+        return pd.read_csv(uploaded_file, header=None).fillna("").astype(str)
+    return pd.read_excel(uploaded_file, header=None).fillna("").astype(str)
+
+
+def clean_column_name(value, index: int) -> str:
+    text = str(value).strip()
+    if not text or text.lower() == "nan":
+        return f"Column {index + 1}"
+    return text
+
+
+def make_unique_columns(columns: list[str]) -> list[str]:
+    seen = {}
+    unique = []
+    for col in columns:
+        base = str(col).strip() or "Column"
+        count = seen.get(base, 0)
+        unique.append(base if count == 0 else f"{base}_{count + 1}")
+        seen[base] = count + 1
+    return unique
+
+
+def dataframe_from_header_choice(raw_df: pd.DataFrame, use_first_row: bool, columns: list[str]) -> pd.DataFrame:
+    data = raw_df.iloc[1:].reset_index(drop=True) if use_first_row else raw_df.copy()
+    data.columns = make_unique_columns(columns)
+    return data.fillna("").astype(str)
+
+
+def schema_columns_from_metadata(mem_manager, memory_name: str) -> list[str]:
+    meta = mem_manager.get_memory_metadata(memory_name) if memory_name else {}
+    schema = meta.get("schema") or {}
+    return [col for col in schema.keys() if col not in SYSTEM_COLS]
+
+
+def align_to_schema(df: pd.DataFrame, schema_cols: list[str], mapping: dict[str, str]) -> pd.DataFrame:
+    aligned = pd.DataFrame()
+    for target_col in schema_cols:
+        source_col = mapping.get(target_col)
+        if source_col and source_col in df.columns:
+            aligned[target_col] = df[source_col]
+        else:
+            aligned[target_col] = ""
+    return aligned
 
 
 def clear_search_state():
@@ -685,122 +726,186 @@ elif mode == "Data Upload":
         "Import files and save searchable project memory.",
     )
     require_login()
-    guidance("Use this page for bulk import. The file must contain the required project columns before it can be saved.")
+    guidance("Create a new memory from any structured file, or append to an existing memory using its saved column structure.")
 
-    template_df = sample_template_dataframe()
-    dl1, dl2 = st.columns(2)
-    with dl1:
-        st.download_button(
-            "Download CSV template",
-            template_df.to_csv(index=False).encode("utf-8"),
-            "apma_upload_template.csv",
-            "text/csv",
-            help="Download a blank CSV with the exact columns required by APMA.",
-        )
-    with dl2:
-        st.download_button(
-            "Download Excel template",
-            excel_bytes(template_df),
-            "apma_upload_template.xlsx",
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            help="Download a blank Excel template with the exact columns required by APMA.",
-        )
-
-    with st.expander("Required upload columns", expanded=False):
-        st.write("Your CSV or Excel file must include these columns:")
-        st.dataframe(pd.DataFrame({"Required column": REQUIRED_COLS}), hide_index=True, use_container_width=True)
+    memories = mem_manager.list_memories()
+    file_mem_mode = st.radio(
+        "Upload destination",
+        ["Create new memory", "Append to existing memory"],
+        horizontal=True,
+        key="file_mem_mode",
+        help="New memories can define their own columns. Existing memories use their saved structure.",
+    )
 
     uploaded = st.file_uploader(
         "Upload CSV or Excel file",
         ["csv", "xlsx"],
-        help="Accepted formats are .csv and .xlsx. The app validates required columns before saving.",
+        help="Accepted formats are .csv and .xlsx.",
     )
 
     if uploaded:
-        df, err = DataHandler.read_and_validate(uploaded, required_cols=REQUIRED_COLS)
-        if err:
-            st.error(err)
-            st.info("Check the source file headers and try uploading again.")
-            with st.expander("Import as flexible repository", expanded=False):
-                st.write("Use this if the file belongs to a different repository structure.")
-                try:
-                    flex_df = read_uploaded_flexible(uploaded)
-                    st.dataframe(flex_df.head(20), use_container_width=True)
-                    flex_name = st.text_input("Flexible memory name", key="flex_memory_name")
-                    flex_allowed = permission_input("flex_memory")
-                    if st.button("Save flexible file", help="Save this file with its own column structure."):
-                        if not flex_name:
-                            st.error("Please enter a memory name.")
-                            st.stop()
-                        flex_df = add_traceability(flex_df, is_new_record=True)
-                        flex_df["__semantic_text__"] = build_semantic_text(flex_df)
-                        save_memory_with_embeddings(
-                            mem_manager,
-                            emb_engine,
-                            flex_name,
-                            flex_df,
-                            allowed_user_ids=flex_allowed,
-                            audit_action="flexible_upload",
-                        )
-                        st.success(f"Flexible memory '{flex_name}' saved.")
-                except Exception as exc:
-                    st.error(f"Could not read flexible file: {exc}")
-        else:
-            st.success(f"Validated {len(df)} rows.")
-            st.dataframe(df.head(20), use_container_width=True)
+        try:
+            raw_df = read_uploaded_flexible(uploaded)
+        except Exception as exc:
+            st.error(f"Could not read file: {exc}")
+            st.stop()
 
-            memories = mem_manager.list_memories()
-            file_mem_mode = st.radio(
-                "Save uploaded file to",
-                ["Create new memory", "Append to existing memory"],
+        if raw_df.empty:
+            st.warning("The uploaded file is empty.")
+            st.stop()
+
+        if file_mem_mode == "Create new memory":
+            mem_name = st.text_input(
+                "New memory name",
+                key="file_new_memory_name",
+                help="Use a clear name for this knowledge repository.",
+            )
+            allowed_user_ids = permission_input("file_memory")
+
+            first_row = raw_df.iloc[0].tolist()
+            detected_cols = make_unique_columns([
+                clean_column_name(value, idx) for idx, value in enumerate(first_row)
+            ])
+
+            st.markdown("### Detected column headers")
+            st.dataframe(pd.DataFrame({"Detected column": detected_cols}), hide_index=True, use_container_width=True)
+
+            use_first_row = st.radio(
+                "Should the first row be treated as column headers?",
+                ["Yes", "No"],
                 horizontal=True,
-                key="file_mem_mode",
-                help="Create a separate knowledge base or add these rows to one that already exists.",
+                key="use_first_row_headers",
+                help="Choose Yes if the first row contains column names. Choose No if it is a data row.",
+            ) == "Yes"
+
+            default_cols = detected_cols if use_first_row else [f"Column {i + 1}" for i in range(raw_df.shape[1])]
+            edit_cols = st.radio(
+                "Are these column names correct?",
+                ["Yes, continue", "No, I want to edit them"],
+                horizontal=True,
+                key="edit_detected_columns",
             )
 
-            if file_mem_mode == "Create new memory":
-                mem_name = st.text_input(
-                    "New memory name",
-                    key="file_new_memory_name",
-                    help="Use a clear business name, for example Client-2026-Lessons or Packaging-Line-Issues.",
-                )
+            final_cols = []
+            if edit_cols == "No, I want to edit them":
+                st.markdown("### Edit column names")
+                col_widgets = st.columns(2)
+                for idx, col_name in enumerate(default_cols):
+                    with col_widgets[idx % 2]:
+                        final_cols.append(
+                            st.text_input(
+                                f"Column {idx + 1}",
+                                value=col_name,
+                                key=f"detected_col_{idx}",
+                            )
+                        )
             else:
-                if memories:
-                    mem_name = st.selectbox(
-                        "Select existing memory",
-                        memories,
-                        key="file_existing_memory",
-                        help="The uploaded rows will be appended and the search index rebuilt.",
-                    )
-                else:
-                    st.warning("No existing memories are available yet.")
-                    mem_name = None
+                final_cols = default_cols
 
-            if file_mem_mode == "Create new memory":
-                allowed_user_ids = permission_input("file_memory")
-            else:
-                allowed_user_ids = (
-                    mem_manager.get_memory_metadata(mem_name).get("allowed_user_ids", ["*"])
-                    if mem_name else ["*"]
-                )
+            final_cols = make_unique_columns([clean_column_name(col, idx) for idx, col in enumerate(final_cols)])
+            preview_df = dataframe_from_header_choice(raw_df, use_first_row, final_cols)
 
-            if st.button("Save file data", help="Store the validated file records and rebuild AI embeddings."):
+            st.warning(
+                "Please ensure that future uploads for this memory repository use the same column header names and structure. "
+                "Consistent column names improve data quality, retrieval accuracy, and knowledge organization."
+            )
+            st.markdown("### Import preview")
+            st.dataframe(preview_df.head(20), use_container_width=True)
+
+            if st.button("Create memory", help="Save this file and register these columns as the official memory structure."):
                 if not mem_name:
-                    st.error("Please select or enter a memory name.")
+                    st.error("Please enter a memory name.")
                     st.stop()
+                preview_df = add_traceability(preview_df, is_new_record=True)
+                preview_df["__semantic_text__"] = build_semantic_text(preview_df)
+                save_memory_with_embeddings(
+                    mem_manager,
+                    emb_engine,
+                    mem_name,
+                    preview_df,
+                    allowed_user_ids=allowed_user_ids,
+                    audit_action="create_memory_from_detected_schema",
+                )
+                st.success(f"Memory '{mem_name}' created with {len(final_cols)} registered columns.")
 
-                df = add_traceability(df, is_new_record=True)
-                df["__semantic_text__"] = build_semantic_text(df)
-                final_df = append_to_memory(mem_manager, mem_name, df)
+        else:
+            if not memories:
+                st.warning("No existing memories are available yet.")
+                st.stop()
+
+            mem_name = st.selectbox(
+                "Select existing memory",
+                memories,
+                key="file_existing_memory",
+                help="The upload will be checked against this memory's saved column structure.",
+            )
+            schema_cols = schema_columns_from_metadata(mem_manager, mem_name)
+            if not schema_cols:
+                existing_df = mem_manager.load_memory_dataframe(mem_name)
+                schema_cols = [col for col in existing_df.columns if col not in SYSTEM_COLS]
+
+            first_row = raw_df.iloc[0].tolist()
+            detected_cols = make_unique_columns([
+                clean_column_name(value, idx) for idx, value in enumerate(first_row)
+            ])
+
+            st.markdown("### Detected upload columns")
+            st.dataframe(pd.DataFrame({"Detected column": detected_cols}), hide_index=True, use_container_width=True)
+            with st.expander("Saved memory structure", expanded=False):
+                st.dataframe(pd.DataFrame({"Expected column": schema_cols}), hide_index=True, use_container_width=True)
+
+            use_first_row = st.radio(
+                "Should the first row be treated as column headers?",
+                ["Yes", "No"],
+                horizontal=True,
+                key="append_use_first_row_headers",
+            ) == "Yes"
+            upload_cols = detected_cols if use_first_row else [f"Column {i + 1}" for i in range(raw_df.shape[1])]
+            upload_df = dataframe_from_header_choice(raw_df, use_first_row, upload_cols)
+
+            missing = [col for col in schema_cols if col not in upload_df.columns]
+            extra = [col for col in upload_df.columns if col not in schema_cols]
+
+            if missing or extra:
+                st.warning("Column mismatch detected. Review or map the uploaded columns before appending.")
+                if missing:
+                    st.write(f"Missing expected columns: {', '.join(missing)}")
+                if extra:
+                    st.write(f"Extra uploaded columns: {', '.join(extra)}")
+
+                mapping = {}
+                st.markdown("### Map uploaded columns")
+                available_sources = ["-- leave blank --"] + list(upload_df.columns)
+                for target_col in schema_cols:
+                    default_index = available_sources.index(target_col) if target_col in available_sources else 0
+                    selected_source = st.selectbox(
+                        target_col,
+                        available_sources,
+                        index=default_index,
+                        key=f"map_{target_col}",
+                    )
+                    mapping[target_col] = "" if selected_source == "-- leave blank --" else selected_source
+                append_df = align_to_schema(upload_df, schema_cols, mapping)
+            else:
+                append_df = upload_df[schema_cols].copy()
+
+            st.markdown("### Append preview")
+            st.dataframe(append_df.head(20), use_container_width=True)
+
+            allowed_user_ids = mem_manager.get_memory_metadata(mem_name).get("allowed_user_ids", ["*"])
+            if st.button("Append to memory", help="Append these rows using the memory's registered structure."):
+                append_df = add_traceability(append_df, is_new_record=True)
+                append_df["__semantic_text__"] = build_semantic_text(append_df)
+                final_df = append_to_memory(mem_manager, mem_name, append_df)
                 save_memory_with_embeddings(
                     mem_manager,
                     emb_engine,
                     mem_name,
                     final_df,
                     allowed_user_ids=allowed_user_ids,
-                    audit_action="upload_records",
+                    audit_action="append_with_schema_validation",
                 )
-                st.success(f"File data saved to memory '{mem_name}'.")
+                st.success(f"Data appended to memory '{mem_name}'.")
 
 
 elif mode == "Manual Entry":
