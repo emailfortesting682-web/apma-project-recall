@@ -392,6 +392,45 @@ def inject_professional_theme():
             font-size: 15px;
             line-height: 1.4;
             padding: 6px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .apma-search-icon {
+            width: 18px;
+            height: 18px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--apma-blue);
+            flex: 0 0 auto;
+        }
+        .apma-search-icon.scan {
+            animation: apma-scan 1.25s ease-in-out infinite;
+        }
+        .apma-spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid #d1d5db;
+            border-top-color: var(--apma-blue);
+            border-radius: 999px;
+            animation: apma-spin 0.85s linear infinite;
+            flex: 0 0 auto;
+        }
+        .apma-done-dot {
+            width: 9px;
+            height: 9px;
+            background: #107c10;
+            border-radius: 999px;
+            box-shadow: 0 0 0 4px rgba(16, 124, 16, 0.12);
+            flex: 0 0 auto;
+        }
+        @keyframes apma-spin {
+            to { transform: rotate(360deg); }
+        }
+        @keyframes apma-scan {
+            0%, 100% { transform: translateX(0) rotate(-8deg); opacity: 0.75; }
+            50% { transform: translateX(5px) rotate(8deg); opacity: 1; }
         }
         @media (max-width: 900px) {
             .apma-hero {
@@ -449,8 +488,17 @@ def guidance(text: str):
         st.write(text)
 
 
-def set_search_status(container, text: str):
-    container.markdown(f'<div class="apma-search-status">{text}</div>', unsafe_allow_html=True)
+def set_search_status(container, text: str, state: str = "search"):
+    if state == "thinking":
+        icon = '<span class="apma-spinner" aria-hidden="true"></span>'
+    elif state == "done":
+        icon = '<span class="apma-done-dot" aria-hidden="true"></span>'
+    else:
+        icon = '<span class="apma-search-icon scan" aria-hidden="true">⌕</span>'
+    container.markdown(
+        f'<div class="apma-search-status">{icon}<span>{text}</span></div>',
+        unsafe_allow_html=True,
+    )
 
 
 def metric_card(title: str, value: str, note: str):
@@ -1242,7 +1290,7 @@ elif mode == "Search & Insights":
                 st.stop()
 
             status_box = st.empty()
-            set_search_status(status_box, "Looking into data...")
+            set_search_status(status_box, "Looking into data...", "search")
             try:
                 if mem == "All memories":
                     frames = []
@@ -1286,7 +1334,7 @@ elif mode == "Search & Insights":
 
             res["Citation"] = [f"R{i + 1}" for i in range(len(res))]
 
-            set_search_status(status_box, "Thinking...")
+            set_search_status(status_box, "Thinking...", "thinking")
             insights = recall_engine.generate_structured_insights(res)
             template = templates[summary_template_name]
             answer = recall_engine.generate_llm_summary(
@@ -1296,7 +1344,7 @@ elif mode == "Search & Insights":
                 instructions=template.get("instructions", ""),
                 result_rows=res,
             )
-            set_search_status(status_box, "Done.")
+            set_search_status(status_box, "Done.", "done")
 
             st.session_state["last_result_df"] = res
             st.session_state["last_summary"] = answer
