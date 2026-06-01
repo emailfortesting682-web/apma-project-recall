@@ -536,16 +536,11 @@ if mode == "Dashboard":
     memories = mem_manager.list_memories()
     total_records = sum(memory_record_count(mem_manager, mem) for mem in memories)
 
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2 = st.columns(2)
     with c1:
         metric_card("Saved memories", str(len(memories)), "Knowledge bases available for search")
     with c2:
         metric_card("Stored records", str(total_records), "Rows available across all memories")
-    with c3:
-        metric_card("AI search", "Ready" if emb_engine else "Needs key", "OpenAI embeddings status")
-    with c4:
-        storage = "Supabase" if getattr(mem_manager, "use_supabase", False) else "Local"
-        metric_card("Storage", storage, "Current persistence backend")
 
     st.markdown("### Workflow")
     steps = [
@@ -556,18 +551,6 @@ if mode == "Dashboard":
     ]
     for title, body in steps:
         st.markdown(f'<div class="apma-workflow"><strong>{title}</strong><br>{body}</div>', unsafe_allow_html=True)
-
-    st.markdown("### Quick actions")
-    qa1, qa2, qa3 = st.columns(3)
-    with qa1:
-        if st.button("Upload project file", help="Go to the bulk CSV/Excel upload workflow."):
-            go_to("Data Upload")
-    with qa2:
-        if st.button("Add manual record", help="Go to the manual lesson-learned entry workflow."):
-            go_to("Manual Entry")
-    with qa3:
-        if st.button("Search memories", help="Go to semantic search and reporting."):
-            go_to("Search & Insights")
 
     st.markdown("### Existing memories")
     if memories:
@@ -725,17 +708,14 @@ elif mode == "Manual Entry":
     extra_fields = [field for field in config if field not in known_fields]
 
     with st.form("manual_dynamic"):
-        st.markdown("#### Project information")
         cols = st.columns(3)
         for idx, field in enumerate([f for f in project_fields if f in config]):
             with cols[idx % 3]:
                 render_manual_field(field)
 
-        st.markdown("#### Problem and lesson learned")
         for field in [f for f in detail_fields if f in config]:
             render_manual_field(field)
 
-        st.markdown("#### Reports and ownership")
         cols = st.columns(2)
         for idx, field in enumerate([f for f in report_fields if f in config]):
             with cols[idx % 2]:
@@ -897,7 +877,7 @@ elif mode == "Settings":
     )
     require_login()
 
-    fields_tab, templates_tab, system_tab = st.tabs(["Manual fields", "Summary templates", "System status"])
+    fields_tab, templates_tab, system_tab = st.tabs(["Manual fields", "Summary templates", "Workspace"])
 
     with fields_tab:
         guidance("Manual fields control the form shown on the Manual Entry page. Required system columns cannot be deleted.")
@@ -1061,9 +1041,7 @@ elif mode == "Settings":
                 rerun()
 
     with system_tab:
-        st.markdown("### Deployment readiness")
-        storage = "Supabase" if getattr(mem_manager, "use_supabase", False) else "Local data folder"
-        st.write(f"Storage backend: **{storage}**")
-        st.write(f"OpenAI embeddings: **{'Available' if emb_engine else 'Not available'}**")
+        st.markdown("### Workspace overview")
         st.write(f"Saved memories: **{len(mem_manager.list_memories())}**")
-        guidance("For client testing, storage should show Supabase and OpenAI embeddings should show Available.")
+        st.write(f"Search features: **{'Available' if emb_engine else 'Needs setup'}**")
+        guidance("This page shows whether the workspace is ready for normal use.")
