@@ -8,7 +8,7 @@ from streamlit import rerun
 
 from modules import user_manager
 from modules.data_handler import DataHandler
-from modules.download_utils import export_csv, export_excel, export_pdf, export_word
+from modules.download_utils import export_csv, export_excel, export_json, export_pdf, export_word
 from modules.embeddings_engine import EmbeddingsEngine
 from modules.file_manager import MemoryManager
 from modules.manual_config import load_config, save_config
@@ -45,12 +45,19 @@ REQUIRED_COLS = [
 SYSTEM_COLS = {
     "__semantic_text__",
     "AddedBy",
+    "AddedByName",
+    "CreatedAt",
+    "ModifiedBy",
+    "ModifiedByName",
+    "ModifiedAt",
     "df_idx",
     "TextScore",
     "PhaseBonus",
     "CategoryBonus",
     "FinalScore",
 }
+
+TRACEABILITY_COLS = ["AddedBy", "AddedByName", "CreatedAt", "ModifiedBy", "ModifiedByName", "ModifiedAt"]
 
 
 def normalize(col: str) -> str:
@@ -74,6 +81,39 @@ def append_to_memory(mem_manager, memory_name, new_df):
         existing = mem_manager.load_memory_dataframe(memory_name)
         return pd.concat([existing, new_df], ignore_index=True)
     return new_df
+
+
+def current_username() -> str:
+    user = st.session_state.get("user") or {}
+    return " ".join(
+        part for part in [user.get("first_name", ""), user.get("last_name", "")] if part
+    ).strip() or user.get("id", "")
+
+
+def add_traceability(df: pd.DataFrame, is_new_record: bool = True) -> pd.DataFrame:
+    user = st.session_state.get("user") or {}
+    now = pd.Timestamp.utcnow().isoformat()
+    out = df.copy()
+    if is_new_record:
+        out["AddedBy"] = user.get("id", "")
+        out["AddedByName"] = current_username()
+        out["CreatedAt"] = now
+    for col in ["AddedBy", "AddedByName", "CreatedAt"]:
+        if col not in out.columns:
+            out[col] = ""
+    out["ModifiedBy"] = user.get("id", "")
+    out["ModifiedByName"] = current_username()
+    out["ModifiedAt"] = now
+    return out
+
+
+def infer_schema(df: pd.DataFrame) -> dict:
+    schema = {}
+    for col in df.columns:
+        if col in SYSTEM_COLS:
+            continue
+        schema[col] = {"type": str(df[col].dtype), "required": col in REQUIRED_COLS}
+    return schema
 
 
 def get_existing_columns(mem_manager):
@@ -328,8 +368,14 @@ def memory_record_count(mem_manager, memory_id: str) -> int:
         return 0
 
 
-def save_memory_with_embeddings(mem_manager, emb_engine, name: str, df: pd.DataFrame):
-    meta = mem_manager.create_or_update_memory(name, df)
+def save_memory_with_embeddings(mem_manager, emb_engine, name: str, df: pd.DataFrame, allowed_user_ids=None, audit_action="save_memory"):
+    meta = mem_manager.create_or_update_memory(
+        name,
+        df,
+        allowed_user_ids=allowed_user_ids,
+        schema=infer_schema(df),
+        audit_action=audit_action,
+    )
     if emb_engine:
         emb_engine.index_dataframe(meta["memory_path"], df, id_prefix=meta["memory_id"])
     return meta
@@ -346,6 +392,14 @@ def excel_bytes(df: pd.DataFrame) -> bytes:
     return buffer.getvalue()
 
 
+def read_uploaded_flexible(uploaded_file):
+    uploaded_file.seek(0)
+    name = uploaded_file.name.lower()
+    if name.endswith(".csv"):
+        return pd.read_csv(uploaded_file).fillna("").astype(str)
+    return pd.read_excel(uploaded_file).fillna("").astype(str)
+
+
 def clear_search_state():
     for key in ["last_result_df", "last_summary", "last_query", "last_result_memory"]:
         st.session_state.pop(key, None)
@@ -354,6 +408,28 @@ def clear_search_state():
 def go_to(page: str):
     st.session_state["workspace_nav"] = page
     rerun()
+
+
+def permission_input(key_prefix: str):
+    share_mode = st.radio(
+        "Memory access",
+        ["Shared workspace", "Only me", "Specific users"],
+        horizontal=True,
+        key=f"{key_prefix}_share_mode",
+        help="Choose who can find and add records to this memory.",
+    )
+    if share_mode == "Shared workspace":
+        return ["*"]
+    if share_mode == "Only me":
+        return [st.session_state["user"]["id"]]
+    raw_ids = st.text_input(
+        "Allowed user IDs",
+        key=f"{key_prefix}_allowed_ids",
+        help="Enter comma-separated user IDs that can access this memory.",
+    )
+    ids = [item.strip() for item in raw_ids.split(",") if item.strip()]
+    owner_id = st.session_state["user"]["id"]
+    return sorted(set(ids + [owner_id]))
 
 
 def render_download_panel(df: pd.DataFrame, summary: str):
@@ -376,7 +452,7 @@ def render_download_panel(df: pd.DataFrame, summary: str):
     )
     format_choice = st.selectbox(
         "File format",
-        ["CSV", "Excel", "PDF", "Word"],
+        ["CSV", "Excel", "PDF", "Word", "JSON"],
         key="download_format_choice",
         help="Select the format that is easiest for your client to review or archive.",
     )
@@ -413,6 +489,9 @@ def render_download_panel(df: pd.DataFrame, summary: str):
             "report.docx",
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         )
+    elif format_choice == "JSON":
+        data = export_json(export_df, export_summary)
+        st.download_button("Download JSON", data, "report.json", "application/json")
 
 
 st.set_page_config(
@@ -427,7 +506,7 @@ inject_professional_theme()
 if "user" not in st.session_state:
     st.session_state["user"] = None
 
-mem_manager = MemoryManager(data_dir="data")
+mem_manager = MemoryManager(data_dir="data", current_user=st.session_state.get("user"))
 
 emb_engine = None
 if OPENAI_API_KEY:
@@ -556,6 +635,34 @@ if mode == "Dashboard":
     if memories:
         rows = [{"Memory": mem, "Records": memory_record_count(mem_manager, mem)} for mem in memories]
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        export_mem = st.selectbox(
+            "Export memory",
+            memories,
+            help="Download the complete raw repository for backup or review.",
+        )
+        raw_df = mem_manager.load_memory_dataframe(export_mem)
+        e1, e2, e3 = st.columns(3)
+        with e1:
+            st.download_button(
+                "Download raw CSV",
+                raw_df.to_csv(index=False).encode("utf-8"),
+                f"{export_mem}.csv",
+                "text/csv",
+            )
+        with e2:
+            st.download_button(
+                "Download raw Excel",
+                excel_bytes(raw_df),
+                f"{export_mem}.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        with e3:
+            st.download_button(
+                "Download raw JSON",
+                export_json(raw_df, ""),
+                f"{export_mem}.json",
+                "application/json",
+            )
     else:
         if st.session_state.get("user"):
             guidance("No memories found yet. Use Upload project file or Add manual record to create the first project memory.")
@@ -605,6 +712,30 @@ elif mode == "Data Upload":
         if err:
             st.error(err)
             st.info("Check the source file headers and try uploading again.")
+            with st.expander("Import as flexible repository", expanded=False):
+                st.write("Use this if the file belongs to a different repository structure.")
+                try:
+                    flex_df = read_uploaded_flexible(uploaded)
+                    st.dataframe(flex_df.head(20), use_container_width=True)
+                    flex_name = st.text_input("Flexible memory name", key="flex_memory_name")
+                    flex_allowed = permission_input("flex_memory")
+                    if st.button("Save flexible file", help="Save this file with its own column structure."):
+                        if not flex_name:
+                            st.error("Please enter a memory name.")
+                            st.stop()
+                        flex_df = add_traceability(flex_df, is_new_record=True)
+                        flex_df["__semantic_text__"] = build_semantic_text(flex_df)
+                        save_memory_with_embeddings(
+                            mem_manager,
+                            emb_engine,
+                            flex_name,
+                            flex_df,
+                            allowed_user_ids=flex_allowed,
+                            audit_action="flexible_upload",
+                        )
+                        st.success(f"Flexible memory '{flex_name}' saved.")
+                except Exception as exc:
+                    st.error(f"Could not read flexible file: {exc}")
         else:
             st.success(f"Validated {len(df)} rows.")
             st.dataframe(df.head(20), use_container_width=True)
@@ -636,15 +767,30 @@ elif mode == "Data Upload":
                     st.warning("No existing memories are available yet.")
                     mem_name = None
 
+            if file_mem_mode == "Create new memory":
+                allowed_user_ids = permission_input("file_memory")
+            else:
+                allowed_user_ids = (
+                    mem_manager.get_memory_metadata(mem_name).get("allowed_user_ids", ["*"])
+                    if mem_name else ["*"]
+                )
+
             if st.button("Save file data", help="Store the validated file records and rebuild AI embeddings."):
                 if not mem_name:
                     st.error("Please select or enter a memory name.")
                     st.stop()
 
-                df["AddedBy"] = st.session_state["user"]["id"]
+                df = add_traceability(df, is_new_record=True)
                 df["__semantic_text__"] = build_semantic_text(df)
                 final_df = append_to_memory(mem_manager, mem_name, df)
-                save_memory_with_embeddings(mem_manager, emb_engine, mem_name, final_df)
+                save_memory_with_embeddings(
+                    mem_manager,
+                    emb_engine,
+                    mem_name,
+                    final_df,
+                    allowed_user_ids=allowed_user_ids,
+                    audit_action="upload_records",
+                )
                 st.success(f"File data saved to memory '{mem_name}'.")
 
 
@@ -675,6 +821,14 @@ elif mode == "Manual Entry":
             target_memory = st.selectbox("Select memory", memories, key="manual_existing_memory")
         else:
             st.warning("No existing memories are available yet.")
+
+    if mem_mode == "Create new memory":
+        allowed_user_ids = permission_input("manual_memory")
+    else:
+        allowed_user_ids = (
+            mem_manager.get_memory_metadata(target_memory).get("allowed_user_ids", ["*"])
+            if target_memory else ["*"]
+        )
 
     def render_manual_field(field: str):
         meta = config[field]
@@ -750,10 +904,17 @@ elif mode == "Manual Entry":
                         if col not in df_manual.columns:
                             df_manual[col] = ""
 
-                    df_manual["AddedBy"] = st.session_state["user"]["id"]
+                    df_manual = add_traceability(df_manual, is_new_record=True)
                     df_manual["__semantic_text__"] = build_semantic_text(df_manual)
                     final_df = append_to_memory(mem_manager, target_memory, df_manual)
-                    save_memory_with_embeddings(mem_manager, emb_engine, target_memory, final_df)
+                    save_memory_with_embeddings(
+                        mem_manager,
+                        emb_engine,
+                        target_memory,
+                        final_df,
+                        allowed_user_ids=allowed_user_ids,
+                        audit_action="manual_records",
+                    )
                     st.session_state["manual_rows"] = []
                     st.success(f"Saved manual entries to memory '{target_memory}'.")
                     st.rerun()
@@ -771,7 +932,8 @@ elif mode == "Search & Insights":
     require_login()
     guidance("Use semantic search for natural-language questions. Use structured filters when you know the exact field to inspect.")
 
-    templates = load_templates()
+    user_id = st.session_state["user"]["id"]
+    templates = load_templates(user_id=user_id)
     mems = mem_manager.list_memories()
 
     if not mems:
@@ -780,7 +942,7 @@ elif mode == "Search & Insights":
 
     top1, top2 = st.columns(2)
     with top1:
-        mem = st.selectbox("Memory", mems, help="Select the project memory to search.")
+        mem = st.selectbox("Memory", ["All memories"] + mems, help="Select one memory or search all accessible memories.")
     with top2:
         summary_template_name = st.selectbox(
             "Summary format",
@@ -797,6 +959,18 @@ elif mode == "Search & Insights":
     search_tab, filter_tab = st.tabs(["AI Semantic Search", "Structured Filter Search"])
 
     with search_tab:
+        if mem == "All memories":
+            column_source_frames = [mem_manager.load_memory_dataframe(item) for item in mems]
+            memory_df_for_columns = pd.concat(column_source_frames, ignore_index=True) if column_source_frames else pd.DataFrame()
+        else:
+            memory_df_for_columns = mem_manager.load_memory_dataframe(mem)
+        searchable_columns = [col for col in memory_df_for_columns.columns if col not in SYSTEM_COLS]
+        search_scope = st.multiselect(
+            "Search scope",
+            searchable_columns,
+            default=[],
+            help="Leave empty to search the full record, or choose specific columns for column-aware retrieval.",
+        )
         q = st.text_area(
             "Question or problem description",
             placeholder="Example: installation delays caused by unclear layout requirements",
@@ -812,7 +986,16 @@ elif mode == "Search & Insights":
                 st.stop()
 
             try:
-                res = recall_engine.query_memory(mem, q)
+                if mem == "All memories":
+                    frames = []
+                    for item in mems:
+                        item_res = recall_engine.query_memory(item, q, search_columns=search_scope or None)
+                        if not item_res.empty:
+                            item_res["Memory"] = item
+                            frames.append(item_res)
+                    res = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+                else:
+                    res = recall_engine.query_memory(mem, q, search_columns=search_scope or None)
             except FileNotFoundError:
                 st.error("Embeddings were not found for this memory. Re-save or re-upload the memory to rebuild them.")
                 st.stop()
@@ -821,6 +1004,8 @@ elif mode == "Search & Insights":
                 st.info("No matching results found.")
                 st.stop()
 
+            res["Citation"] = [f"R{i + 1}" for i in range(len(res))]
+
             insights = recall_engine.generate_structured_insights(res)
             template = templates[summary_template_name]
             answer = recall_engine.generate_llm_summary(
@@ -828,6 +1013,7 @@ elif mode == "Search & Insights":
                 query=q,
                 template=template,
                 instructions=template.get("instructions", ""),
+                result_rows=res,
             )
 
             st.session_state["last_result_df"] = res
@@ -836,21 +1022,31 @@ elif mode == "Search & Insights":
             st.session_state["last_result_memory"] = mem
 
     with filter_tab:
-        filterable_columns = {
-            "COMMESSA": "COMMESSA",
-            "CLIENTE": "CLIENTE",
-            "ANNO": "ANNO",
-            "TIPO MACCHINA": "TIPO MACCHINA",
-            "APPLICAZIONE": "APPLICAZIONE",
-            "TIPO PROBLEMA": "TIPO PROBLEMA",
-        }
+        filterable_columns = ["All columns"] + [
+            col for col in (
+                memory_df_for_columns.columns if mem == "All memories"
+                else mem_manager.load_memory_dataframe(mem).columns
+            )
+            if col not in SYSTEM_COLS
+        ]
         c1, c2, c3 = st.columns([1, 2, 1])
-        col = c1.selectbox("Filter by", filterable_columns.keys(), help="Choose the column to search within.")
+        col = c1.selectbox("Filter by", filterable_columns, help="Choose the column to search within.")
         val = c2.text_input("Value", help="Enter the value or partial text to match.")
         exact = c3.checkbox("Exact match", False, help="Require an exact value instead of partial matching.")
 
         if st.button("Apply filter", help="Return records that match the selected structured filter."):
-            df = recall_engine.filter_memory(mem, filterable_columns[col], val, exact)
+            if mem == "All memories":
+                frames = []
+                for item in mems:
+                    item_df = recall_engine.filter_memory(item, col, val, exact)
+                    if not item_df.empty:
+                        item_df["Memory"] = item
+                        frames.append(item_df)
+                df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+            else:
+                df = recall_engine.filter_memory(mem, col, val, exact)
+            if not df.empty:
+                df["Citation"] = [f"F{i + 1}" for i in range(len(df))]
             st.session_state["last_result_df"] = df
             st.session_state["last_summary"] = ""
             st.session_state["last_result_memory"] = mem
@@ -972,7 +1168,8 @@ elif mode == "Settings":
 
     with templates_tab:
         guidance("Summary templates define the structure, tone, and length of AI-generated client reports.")
-        templates = load_templates()
+        user_id = st.session_state["user"]["id"]
+        templates = load_templates(user_id=user_id)
         template_names = list(templates.keys())
 
         if template_names:
@@ -1016,7 +1213,7 @@ elif mode == "Settings":
                             "length": parsed.get("length", length),
                             "instructions": instructions,
                         }
-                        save_templates(templates)
+                        save_templates(templates, user_id=user_id)
                         st.success("Template saved successfully.")
                         rerun()
                     except Exception:
@@ -1036,12 +1233,73 @@ elif mode == "Settings":
                     "length": "short",
                     "instructions": "",
                 }
-                save_templates(templates)
+                save_templates(templates, user_id=user_id)
                 st.success("Template created.")
                 rerun()
 
     with system_tab:
         st.markdown("### Workspace overview")
-        st.write(f"Saved memories: **{len(mem_manager.list_memories())}**")
+        memories = mem_manager.list_memories()
+        st.write(f"Saved memories: **{len(memories)}**")
         st.write(f"Search features: **{'Available' if emb_engine else 'Needs setup'}**")
         guidance("This page shows whether the workspace is ready for normal use.")
+
+        if memories:
+            st.markdown("### Memory access")
+            selected_mem = st.selectbox(
+                "Select memory",
+                memories,
+                key="workspace_memory_access",
+                help="Review access, schema, and history for a memory.",
+            )
+            meta = mem_manager.get_memory_metadata(selected_mem)
+            allowed = meta.get("allowed_user_ids", ["*"])
+            access_label = "Shared workspace" if "*" in allowed else ", ".join(allowed)
+            st.write(f"Access: **{access_label}**")
+
+            access_mode = st.radio(
+                "Update access",
+                ["Shared workspace", "Only me", "Specific users"],
+                horizontal=True,
+                key="workspace_access_mode",
+            )
+            if access_mode == "Shared workspace":
+                next_allowed = ["*"]
+            elif access_mode == "Only me":
+                next_allowed = [st.session_state["user"]["id"]]
+            else:
+                raw_allowed = st.text_input(
+                    "Allowed user IDs",
+                    value="" if "*" in allowed else ", ".join(allowed),
+                    key="workspace_allowed_users",
+                )
+                next_allowed = sorted(set(
+                    [item.strip() for item in raw_allowed.split(",") if item.strip()]
+                    + [st.session_state["user"]["id"]]
+                ))
+
+            if st.button("Save access", help="Update who can view and add to this memory."):
+                mem_manager.update_memory_permissions(selected_mem, next_allowed)
+                st.success("Memory access updated.")
+                st.rerun()
+
+            with st.expander("Memory structure", expanded=False):
+                schema = meta.get("schema") or {}
+                if schema:
+                    st.dataframe(
+                        pd.DataFrame([
+                            {"Column": col, "Type": details.get("type", ""), "Required": details.get("required", False)}
+                            for col, details in schema.items()
+                        ]),
+                        hide_index=True,
+                        use_container_width=True,
+                    )
+                else:
+                    st.info("No schema information stored yet. Save new records to refresh the structure.")
+
+            with st.expander("History", expanded=False):
+                audit_log = meta.get("audit_log") or []
+                if audit_log:
+                    st.dataframe(pd.DataFrame(audit_log), hide_index=True, use_container_width=True)
+                else:
+                    st.info("No history is available yet.")

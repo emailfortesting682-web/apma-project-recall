@@ -42,6 +42,18 @@ def _cosine_similarity(a, b):
     return float(np.dot(a, b) / (na * nb))
 
 
+def _row_text(row, columns=None):
+    cols = columns or list(row.index)
+    parts = []
+    for col in cols:
+        if col not in row.index:
+            continue
+        val = str(row[col]).strip()
+        if val and val.lower() != "nan":
+            parts.append(f"{col}: {val}")
+    return " | ".join(parts)
+
+
 # =====================================================
 # RECALL ENGINE
 # =====================================================
@@ -107,15 +119,19 @@ class RecallEngine:
         matched_phase = None
         matched_category = None
 
-        phases = [
-            str(x) for x in pd.unique(df[self.phase_col].dropna())
-            if str(x).strip()
-        ]
+        phases = []
+        categories = []
+        if self.phase_col in df.columns:
+            phases = [
+                str(x) for x in pd.unique(df[self.phase_col].dropna())
+                if str(x).strip()
+            ]
 
-        categories = [
-            str(x) for x in pd.unique(df[self.category_col].dropna())
-            if str(x).strip()
-        ]
+        if self.category_col in df.columns:
+            categories = [
+                str(x) for x in pd.unique(df[self.category_col].dropna())
+                if str(x).strip()
+            ]
 
         for p in phases:
             if fuzz.partial_ratio(p.lower(), q) >= self.phase_threshold:
@@ -142,6 +158,7 @@ class RecallEngine:
         weight_phase=0.15,
         weight_category=0.15,
         fallback_k=3,
+        search_columns=None,
     ):
         if not self.emb_engine:
             return pd.DataFrame()
@@ -152,14 +169,26 @@ class RecallEngine:
         if df is None or df.empty:
             return pd.DataFrame()
 
-        payload = self._load_embeddings(mem_id)
-        if payload is None:
-            raise FileNotFoundError(
-                f"Embeddings for memory '{mem_id}' not found."
-            )
+        if search_columns:
+            valid_cols = [col for col in search_columns if col in df.columns]
+            if not valid_cols:
+                return pd.DataFrame()
+            row_ids = list(df.index)
+            texts = [_row_text(row, valid_cols) for _, row in df.iterrows()]
+            usable = [(idx, text) for idx, text in zip(row_ids, texts) if text]
+            if not usable:
+                return pd.DataFrame()
+            row_ids = [idx for idx, _ in usable]
+            embeddings = self.emb_engine.embed_texts([text for _, text in usable])
+        else:
+            payload = self._load_embeddings(mem_id)
+            if payload is None:
+                raise FileNotFoundError(
+                    f"Embeddings for memory '{mem_id}' not found."
+                )
 
-        embeddings = payload["embeddings"]
-        row_ids = payload["row_ids"]
+            embeddings = payload["embeddings"]
+            row_ids = payload["row_ids"]
 
         matched_phase, matched_category = self._extract_context_hints(q_text, df)
 
@@ -191,19 +220,25 @@ class RecallEngine:
 
             phase_bonus = 0.0
             if matched_phase:
-                s = fuzz.partial_ratio(
-                    str(row[self.phase_col]).lower(),
-                    matched_phase.lower(),
-                )
-                phase_bonus = 1.0 if s >= 85 else 0.5 if s >= 65 else 0.0
+                if self.phase_col not in row.index:
+                    phase_bonus = 0.0
+                else:
+                    s = fuzz.partial_ratio(
+                        str(row[self.phase_col]).lower(),
+                        matched_phase.lower(),
+                    )
+                    phase_bonus = 1.0 if s >= 85 else 0.5 if s >= 65 else 0.0
 
             category_bonus = 0.0
             if matched_category:
-                s = fuzz.partial_ratio(
-                    str(row[self.category_col]).lower(),
-                    matched_category.lower(),
-                )
-                category_bonus = 1.0 if s >= 85 else 0.5 if s >= 65 else 0.0
+                if self.category_col not in row.index:
+                    category_bonus = 0.0
+                else:
+                    s = fuzz.partial_ratio(
+                        str(row[self.category_col]).lower(),
+                        matched_category.lower(),
+                    )
+                    category_bonus = 1.0 if s >= 85 else 0.5 if s >= 65 else 0.0
 
             final_score = (
                 weight_text * text_score
@@ -238,6 +273,7 @@ class RecallEngine:
             row = df.loc[r["df_idx"]]
             rec = row.to_dict()
             rec.update(r.to_dict())
+            rec["Citation"] = f"R{len(out_rows) + 1}"
             out_rows.append(rec)
 
         return pd.DataFrame(out_rows)
@@ -261,6 +297,8 @@ class RecallEngine:
             }
 
         def top_values(series, k=5):
+            if series is None:
+                return []
             return (
                 series.dropna()
                 .astype(str)
@@ -275,14 +313,14 @@ class RecallEngine:
             "top_machine_types": top_values(df.get(self.category_col)),
             "top_applications": top_values(df.get(self.phase_col)),
             "common_problems": (
-                df.get(self.problem_col)
+                (df.get(self.problem_col) if df.get(self.problem_col) is not None else pd.Series(dtype=str))
                 .dropna()
                 .astype(str)
                 .head(5)
                 .tolist()
             ),
             "common_solutions": (
-                df.get(self.solution_col)
+                (df.get(self.solution_col) if df.get(self.solution_col) is not None else pd.Series(dtype=str))
                 .dropna()
                 .astype(str)
                 .head(5)
@@ -404,17 +442,23 @@ class RecallEngine:
         if df is None or df.empty:
             return pd.DataFrame()
     
-        if column not in df.columns:
+        if column != "All columns" and column not in df.columns:
             return pd.DataFrame()
-    
-        if exact:
+
+        if column == "All columns":
+            joined = df.astype(str).agg(" | ".join, axis=1)
+            mask = joined.str.contains(value, case=False, na=False)
+        elif exact:
             mask = df[column].astype(str).str.lower() == value.lower()
         else:
             mask = df[column].astype(str).str.contains(
                 value, case=False, na=False
             )
-    
-        return df[mask].reset_index(drop=True)
+
+        out = df[mask].reset_index(drop=True)
+        if not out.empty:
+            out["Citation"] = [f"F{i + 1}" for i in range(len(out))]
+        return out
 
 
 
@@ -424,11 +468,29 @@ class RecallEngine:
         insights: dict,
         query: str,
         template: dict,
-        instructions: str
+        instructions: str,
+        result_rows: pd.DataFrame | None = None,
     ) -> str:
     
         client = OpenAI()
     
+        grounded_rows = ""
+        if result_rows is not None and not result_rows.empty:
+            safe_cols = [
+                col for col in result_rows.columns
+                if col not in {"__semantic_text__", "TextScore", "PhaseBonus", "CategoryBonus"}
+            ]
+            snippets = []
+            for i, (_, row) in enumerate(result_rows.head(8).iterrows(), start=1):
+                citation = row.get("Citation", f"R{i}")
+                values = []
+                for col in safe_cols[:12]:
+                    val = str(row.get(col, "")).strip()
+                    if val:
+                        values.append(f"{col}: {val[:500]}")
+                snippets.append(f"[{citation}] " + " | ".join(values))
+            grounded_rows = "\n".join(snippets)
+
         prompt = f"""
     You are an expert analyst.
     
@@ -445,6 +507,9 @@ class RecallEngine:
     
     Common solutions:
     {chr(10).join(insights.get('common_solutions', []))}
+
+    Grounded source records:
+    {grounded_rows}
     
     User instructions:
     {instructions}
@@ -454,7 +519,8 @@ class RecallEngine:
     Tone: {template.get('tone')}
     Length: {template.get('length')}
     
-    Write a clear, detailed, outcome-driven summary.
+    Write a clear, outcome-driven summary based only on the source records.
+    Include citations like [R1] or [R2] for claims tied to retrieved records.
     """
     
         resp = client.chat.completions.create(

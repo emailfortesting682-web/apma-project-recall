@@ -1,4 +1,5 @@
 import pandas as pd
+import json
 from io import BytesIO
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.pdfgen import canvas
@@ -13,6 +14,14 @@ def export_csv(df: pd.DataFrame, summary: str) -> bytes:
     buffer.write(f"# SUMMARY\n# {summary.replace('\n', ' ')}\n\n".encode())
     df.to_csv(buffer, index=False)
     return buffer.getvalue()
+
+
+def export_json(df: pd.DataFrame, summary: str) -> bytes:
+    payload = {
+        "summary": summary,
+        "records": df.fillna("").to_dict(orient="records"),
+    }
+    return json.dumps(payload, indent=2, ensure_ascii=False).encode("utf-8")
 
 
 # ===============================

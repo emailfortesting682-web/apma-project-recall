@@ -36,33 +36,65 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def list_memories() -> list[str]:
+def _can_access(metadata: dict[str, Any] | None, user_id: str | None) -> bool:
+    if not user_id:
+        return False
+    metadata = metadata or {}
+    owner_id = metadata.get("owner_id")
+    allowed = metadata.get("allowed_user_ids") or ["*"]
+    return "*" in allowed or user_id == owner_id or user_id in allowed
+
+
+def list_memories(user_id: str | None = None) -> list[str]:
     client = _client()
     if not client:
         return []
-    res = client.table(MEMORIES_TABLE).select("memory_id").order("updated_at", desc=True).execute()
-    return [row["memory_id"] for row in (res.data or [])]
+    res = client.table(MEMORIES_TABLE).select("memory_id,metadata").order("updated_at", desc=True).execute()
+    rows = res.data or []
+    if user_id:
+        rows = [row for row in rows if _can_access(row.get("metadata"), user_id)]
+    return [row["memory_id"] for row in rows]
 
 
-def list_memories_full() -> dict[str, str]:
+def list_memories_full(user_id: str | None = None) -> dict[str, str]:
     client = _client()
     if not client:
         return {}
-    res = client.table(MEMORIES_TABLE).select("memory_id,name").order("updated_at", desc=True).execute()
-    return {row["memory_id"]: row.get("name") or row["memory_id"] for row in (res.data or [])}
+    res = client.table(MEMORIES_TABLE).select("memory_id,name,metadata").order("updated_at", desc=True).execute()
+    rows = res.data or []
+    if user_id:
+        rows = [row for row in rows if _can_access(row.get("metadata"), user_id)]
+    return {row["memory_id"]: row.get("name") or row["memory_id"] for row in rows}
+
+
+def load_memory_metadata(memory_id: str) -> dict[str, Any]:
+    client = _client()
+    if not client:
+        return {}
+    res = client.table(MEMORIES_TABLE).select("metadata").eq("memory_id", memory_id).limit(1).execute()
+    if not res.data:
+        return {}
+    return res.data[0].get("metadata") or {}
 
 
 def upsert_memory(memory_id: str, name: str, df: pd.DataFrame, meta: dict[str, Any]) -> None:
     client = _client()
     if not client:
         return
+    existing_meta = load_memory_metadata(memory_id)
+    merged_meta = {**existing_meta, **meta}
+    audit_log = list(existing_meta.get("audit_log", []))
+    if meta.get("audit_event"):
+        audit_log.append(meta["audit_event"])
+    merged_meta["audit_log"] = audit_log[-250:]
+
     records = df.fillna("").astype(str).to_dict(orient="records")
     client.table(MEMORIES_TABLE).upsert(
         {
             "memory_id": memory_id,
             "name": name,
             "records": records,
-            "metadata": meta,
+            "metadata": merged_meta,
             "updated_at": _now(),
         },
         on_conflict="memory_id",
