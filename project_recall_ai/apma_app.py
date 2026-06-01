@@ -639,7 +639,7 @@ def go_to(page: str):
 
 def permission_input(key_prefix: str):
     share_mode = st.radio(
-        "Memory access",
+        "Who can use this memory?",
         ["Shared workspace", "Only me", "Specific users"],
         horizontal=True,
         key=f"{key_prefix}_share_mode",
@@ -652,7 +652,7 @@ def permission_input(key_prefix: str):
     raw_ids = st.text_input(
         "Allowed user IDs",
         key=f"{key_prefix}_allowed_ids",
-        help="Enter comma-separated user IDs that can access this memory.",
+        help="Enter comma-separated user IDs.",
     )
     ids = [item.strip() for item in raw_ids.split(",") if item.strip()]
     owner_id = st.session_state["user"]["id"]
@@ -679,7 +679,7 @@ def render_download_panel(df: pd.DataFrame, summary: str):
     )
     format_choice = st.selectbox(
         "File format",
-        ["CSV", "Excel", "PDF", "Word", "JSON"],
+        ["CSV", "Excel", "PDF", "Word", "Data file"],
         key="download_format_choice",
         help="Select the format that is easiest for your client to review or archive.",
     )
@@ -716,9 +716,9 @@ def render_download_panel(df: pd.DataFrame, summary: str):
             "report.docx",
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         )
-    elif format_choice == "JSON":
+    elif format_choice == "Data file":
         data = export_json(export_df, export_summary)
-        st.download_button("Download JSON", data, "report.json", "application/json")
+        st.download_button("Download data file", data, "report.json", "application/json")
 
 
 st.set_page_config(
@@ -804,7 +804,7 @@ mode = st.sidebar.radio(
     "Workspace",
     ["Dashboard", "Data Upload", "Manual Entry", "Search & Insights", "Settings"],
     key="workspace_nav",
-    help="Follow the workflow from status review to data capture, search, reporting, and configuration.",
+        help="Move between the main parts of the workspace.",
 )
 
 
@@ -853,7 +853,7 @@ if mode == "Dashboard":
         ("1. Add data", "Upload a file or enter records manually."),
         ("2. Save memory", "Create or append a searchable memory."),
         ("3. Search", "Find matches and generate a report."),
-        ("4. Configure", "Adjust fields and summary templates."),
+            ("4. Set up", "Adjust fields and report formats."),
     ]
     for title, body in steps:
         st.markdown(f'<div class="apma-workflow"><strong>{title}</strong><br>{body}</div>', unsafe_allow_html=True)
@@ -863,9 +863,9 @@ if mode == "Dashboard":
         rows = [{"Memory": mem, "Records": memory_record_count(mem_manager, mem)} for mem in memories]
         st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
         export_mem = st.selectbox(
-            "Export memory",
+            "Download memory",
             memories,
-            help="Download the complete raw repository for backup or review.",
+            help="Download all saved records from this memory.",
         )
         raw_df = mem_manager.load_memory_dataframe(export_mem)
         e1, e2, e3 = st.columns(3)
@@ -885,7 +885,7 @@ if mode == "Dashboard":
             )
         with e3:
             st.download_button(
-                "Download raw JSON",
+                "Download data file",
                 export_json(raw_df, ""),
                 f"{export_mem}.json",
                 "application/json",
@@ -900,10 +900,10 @@ if mode == "Dashboard":
 elif mode == "Data Upload":
     page_header(
         "Data Upload",
-        "Import files and save searchable project memory.",
+        "Import files and save searchable project records.",
     )
     require_login()
-    guidance("Create a new memory from any structured file, or append to an existing memory using its saved column structure.")
+    guidance("Create a new memory from any organized file, or add rows to an existing memory using the same saved fields.")
 
     memories = mem_manager.list_memories()
     file_mem_mode = st.radio(
@@ -911,7 +911,7 @@ elif mode == "Data Upload":
         ["Create new memory", "Append to existing memory"],
         horizontal=True,
         key="file_mem_mode",
-        help="New memories can define their own columns. Existing memories use their saved structure.",
+        help="New memories can define their own fields. Existing memories use their saved fields.",
     )
 
     uploaded = st.file_uploader(
@@ -935,7 +935,7 @@ elif mode == "Data Upload":
             mem_name = st.text_input(
                 "New memory name",
                 key="file_new_memory_name",
-                help="Use a clear name for this knowledge repository.",
+                help="Use a clear name for this memory.",
             )
             allowed_user_ids = permission_input("file_memory")
 
@@ -944,20 +944,20 @@ elif mode == "Data Upload":
                 clean_column_name(value, idx) for idx, value in enumerate(first_row)
             ])
 
-            st.markdown("### Detected column headers")
-            st.dataframe(pd.DataFrame({"Detected column": detected_cols}), hide_index=True, width="stretch")
+            st.markdown("### Detected fields")
+            st.dataframe(pd.DataFrame({"Detected field": detected_cols}), hide_index=True, width="stretch")
 
             use_first_row = st.radio(
-                "Should the first row be treated as column headers?",
+                "Should the first row be used as field names?",
                 ["Yes", "No"],
                 horizontal=True,
                 key="use_first_row_headers",
-                help="Choose Yes if the first row contains column names. Choose No if it is a data row.",
+                help="Choose Yes if the first row contains field names. Choose No if it is a data row.",
             ) == "Yes"
 
             default_cols = detected_cols if use_first_row else [f"Column {i + 1}" for i in range(raw_df.shape[1])]
             edit_cols = st.radio(
-                "Are these column names correct?",
+                "Are these field names correct?",
                 ["Yes, continue", "No, I want to edit them"],
                 horizontal=True,
                 key="edit_detected_columns",
@@ -965,7 +965,7 @@ elif mode == "Data Upload":
 
             final_cols = []
             if edit_cols == "No, I want to edit them":
-                st.markdown("### Edit column names")
+                st.markdown("### Edit field names")
                 col_widgets = st.columns(2)
                 for idx, col_name in enumerate(default_cols):
                     with col_widgets[idx % 2]:
@@ -983,13 +983,13 @@ elif mode == "Data Upload":
             preview_df = dataframe_from_header_choice(raw_df, use_first_row, final_cols)
 
             st.warning(
-                "Please ensure that future uploads for this memory repository use the same column header names and structure. "
-                "Consistent column names improve data quality, retrieval accuracy, and knowledge organization."
+                "Please ensure that future uploads for this memory use the same field names and layout. "
+                "Consistent fields improve data quality, search accuracy, and organization."
             )
             st.markdown("### Import preview")
             st.dataframe(preview_df.head(20), width="stretch")
 
-            if st.button("Create memory", help="Save this file and register these columns as the official memory structure."):
+            if st.button("Create memory", help="Save this file and use these fields for this memory."):
                 if not mem_name:
                     st.error("Please enter a memory name.")
                     st.stop()
@@ -1003,7 +1003,7 @@ elif mode == "Data Upload":
                     allowed_user_ids=allowed_user_ids,
                     audit_action="create_memory_from_detected_schema",
                 )
-                st.success(f"Memory '{mem_name}' created with {len(final_cols)} registered columns.")
+                st.success(f"Memory '{mem_name}' created with {len(final_cols)} saved fields.")
 
         else:
             if not memories:
@@ -1014,7 +1014,7 @@ elif mode == "Data Upload":
                 "Select existing memory",
                 memories,
                 key="file_existing_memory",
-                help="The upload will be checked against this memory's saved column structure.",
+                help="The upload will be checked against this memory's saved fields.",
             )
             schema_cols = schema_columns_from_metadata(mem_manager, mem_name)
             if not schema_cols:
@@ -1026,13 +1026,13 @@ elif mode == "Data Upload":
                 clean_column_name(value, idx) for idx, value in enumerate(first_row)
             ])
 
-            st.markdown("### Detected upload columns")
-            st.dataframe(pd.DataFrame({"Detected column": detected_cols}), hide_index=True, width="stretch")
-            with st.expander("Saved memory structure", expanded=False):
-                st.dataframe(pd.DataFrame({"Expected column": schema_cols}), hide_index=True, width="stretch")
+            st.markdown("### Detected upload fields")
+            st.dataframe(pd.DataFrame({"Detected field": detected_cols}), hide_index=True, width="stretch")
+            with st.expander("Saved memory fields", expanded=False):
+                st.dataframe(pd.DataFrame({"Expected field": schema_cols}), hide_index=True, width="stretch")
 
             use_first_row = st.radio(
-                "Should the first row be treated as column headers?",
+                "Should the first row be used as field names?",
                 ["Yes", "No"],
                 horizontal=True,
                 key="append_use_first_row_headers",
@@ -1044,14 +1044,14 @@ elif mode == "Data Upload":
             extra = [col for col in upload_df.columns if col not in schema_cols]
 
             if missing or extra:
-                st.warning("Column mismatch detected. Review or map the uploaded columns before appending.")
+                st.warning("Field mismatch detected. Review or match the uploaded fields before appending.")
                 if missing:
-                    st.write(f"Missing expected columns: {', '.join(missing)}")
+                    st.write(f"Missing expected fields: {', '.join(missing)}")
                 if extra:
-                    st.write(f"Extra uploaded columns: {', '.join(extra)}")
+                    st.write(f"Extra uploaded fields: {', '.join(extra)}")
 
                 mapping = {}
-                st.markdown("### Map uploaded columns")
+                st.markdown("### Match uploaded fields")
                 available_sources = ["-- leave blank --"] + list(upload_df.columns)
                 for target_col in schema_cols:
                     default_index = available_sources.index(target_col) if target_col in available_sources else 0
@@ -1070,7 +1070,7 @@ elif mode == "Data Upload":
             st.dataframe(append_df.head(20), width="stretch")
 
             allowed_user_ids = mem_manager.get_memory_metadata(mem_name).get("allowed_user_ids", ["*"])
-            if st.button("Append to memory", help="Append these rows using the memory's registered structure."):
+            if st.button("Append to memory", help="Add these rows using the memory's saved fields."):
                 append_df = add_traceability(append_df, is_new_record=True)
                 append_df["__semantic_text__"] = build_semantic_text(append_df)
                 final_df = append_to_memory(mem_manager, mem_name, append_df)
@@ -1186,7 +1186,7 @@ elif mode == "Manual Entry":
 
         c1, c2 = st.columns([1, 1])
         with c1:
-            if st.button("Save manual entries", help="Save all pending rows and rebuild AI embeddings."):
+            if st.button("Save manual entries", help="Save all pending rows and refresh search."):
                 if not target_memory:
                     st.error("Please select or create a memory.")
                 else:
@@ -1221,7 +1221,7 @@ elif mode == "Search & Insights":
         "Find similar records and export reports.",
     )
     require_login()
-    guidance("Use semantic search for natural-language questions. Use structured filters when you know the exact field to inspect.")
+    guidance("Use AI Lookup for everyday questions. Use Filter Search when you already know the field and value.")
 
     user_id = st.session_state["user"]["id"]
     templates = load_templates(user_id=user_id)
@@ -1247,7 +1247,7 @@ elif mode == "Search & Insights":
         clear_search_state()
         st.session_state["last_search_context"] = context
 
-    search_tab, filter_tab = st.tabs(["Hybrid Search", "Structured Filter Search"])
+    search_tab, filter_tab = st.tabs(["AI Lookup", "Filter Search"])
 
     with search_tab:
         if mem == "All memories":
@@ -1260,7 +1260,7 @@ elif mode == "Search & Insights":
             "Search scope",
             searchable_columns,
             default=[],
-            help="Leave empty to search the full record, or choose specific columns for column-aware retrieval.",
+            help="Leave empty to search the full record, or choose specific fields.",
         )
         q = st.text_area(
             "Question or problem description",
@@ -1273,17 +1273,17 @@ elif mode == "Search & Insights":
             min_value=3,
             max_value=20,
             value=10,
-            help="Choose how many top-ranked hybrid results should be used.",
+        help="Choose how many results should be used.",
         )
 
-        with st.expander("Retrieval balance", expanded=False):
+        with st.expander("Search tuning", expanded=False):
             semantic_weight = st.slider("Meaning match", 0.0, 1.0, 0.45, 0.05)
             lexical_weight = st.slider("Keyword match", 0.0, 1.0, 0.30, 0.05)
-            structured_weight = st.slider("Column/exact match", 0.0, 1.0, 0.25, 0.05)
+            structured_weight = st.slider("Field match", 0.0, 1.0, 0.25, 0.05)
 
-        if st.button("Search memory", help="Run hybrid retrieval and generate a grounded summary."):
+        if st.button("Search memory", help="Find relevant records and generate a summary."):
             if not emb_engine:
-                st.error("Embeddings engine is not available. Check OPENAI_API_KEY in Streamlit secrets.")
+                st.error("AI search is not available. Please check app setup.")
                 st.stop()
             if not q.strip():
                 st.warning("Please enter a query.")
@@ -1324,7 +1324,7 @@ elif mode == "Search & Insights":
                     )
             except FileNotFoundError:
                 status_box.empty()
-                st.error("Embeddings were not found for this memory. Re-save or re-upload the memory to rebuild them.")
+                st.error("Search data is missing for this memory. Re-save or re-upload the memory to refresh search.")
                 st.stop()
 
             if res.empty:
@@ -1360,11 +1360,11 @@ elif mode == "Search & Insights":
             if col not in SYSTEM_COLS
         ]
         c1, c2, c3 = st.columns([1, 2, 1])
-        col = c1.selectbox("Filter by", filterable_columns, help="Choose the column to search within.")
+        col = c1.selectbox("Filter by", filterable_columns, help="Choose the field to search within.")
         val = c2.text_input("Value", help="Enter the value or partial text to match.")
-        exact = c3.checkbox("Exact match", False, help="Require an exact value instead of partial matching.")
+        exact = c3.checkbox("Exact match", False, help="Require the same value instead of a partial match.")
 
-        if st.button("Apply filter", help="Return records that match the selected structured filter."):
+        if st.button("Apply filter", help="Return records that match the selected filter."):
             if mem == "All memories":
                 frames = []
                 for item in mems:
@@ -1399,14 +1399,14 @@ elif mode == "Search & Insights":
 elif mode == "Settings":
     page_header(
         "Settings",
-        "Configure fields, summaries, and system status.",
+        "Set up fields, summaries, and workspace details.",
     )
     require_login()
 
     fields_tab, templates_tab, system_tab = st.tabs(["Manual fields", "Summary templates", "Workspace"])
 
     with fields_tab:
-        guidance("Manual fields control the form shown on the Manual Entry page. Required system columns cannot be deleted.")
+        guidance("Manual fields control the form shown on the Manual Entry page. Required fields cannot be deleted.")
         cfg = load_config()
         memory_cols = get_existing_columns(mem_manager)
         config_cols = list(cfg.keys())
@@ -1425,21 +1425,21 @@ elif mode == "Settings":
         if field == field_add:
             st.markdown("### Add field")
             col_choice = st.selectbox(
-                "Choose existing column",
+                "Choose existing field",
                 ["None"] + existing_cols,
-                help="Reuse a column already found in saved memories, or choose None to create a new field.",
+                help="Reuse a field already found in saved memories, or choose None to create a new field.",
             )
-            custom_name = st.text_input("New column name", help="Enter a clear field name if you are not reusing an existing column.")
+            custom_name = st.text_input("New field name", help="Enter a clear field name if you are not reusing an existing field.")
             new_type = st.selectbox("Field type", ["text", "select", "date"], help="Controls how this field appears in Manual Entry.")
             final_name = col_choice if col_choice != "None" else custom_name.strip()
 
-            if st.button("Save field", help="Add this field to the manual-entry configuration."):
+            if st.button("Save field", help="Add this field to the manual-entry form."):
                 if not final_name:
-                    st.error("Please select or enter a column name.")
+                    st.error("Please select or enter a field name.")
                 elif col_choice == "None" and (
                     normalize(final_name) in existing_norm or normalize(final_name) in map(normalize, cfg.keys())
                 ):
-                    st.warning("Column already exists. Choose it from the existing-column list.")
+                    st.warning("Field already exists. Choose it from the existing-field list.")
                 else:
                     cfg[final_name] = {"type": new_type}
                     save_config(cfg)
@@ -1474,11 +1474,11 @@ elif mode == "Settings":
 
             col_a, col_b = st.columns(2)
             with col_a:
-                if st.button("Save field changes", help="Update this field configuration."):
+                if st.button("Save field changes", help="Update this field."):
                     new_norm = normalize(new_field_name)
                     existing_norms = {normalize(c): c for c in cfg.keys() if c != field}
                     if new_norm in existing_norms:
-                        st.error("A column with this name already exists.")
+                        st.error("A field with this name already exists.")
                         st.stop()
                     cfg[new_field_name] = meta
                     if new_field_name != field:
@@ -1490,7 +1490,7 @@ elif mode == "Settings":
             with col_b:
                 if st.button("Delete field", help="Remove this field from the manual-entry form."):
                     if field in REQUIRED_COLS:
-                        st.error("This is a required system column and cannot be deleted.")
+                        st.error("This is a required field and cannot be deleted.")
                         st.stop()
                     save_config({k: v for k, v in cfg.items() if k != field})
                     st.warning(f"Field '{field}' deleted.")
@@ -1516,7 +1516,7 @@ elif mode == "Settings":
                 value=tmpl.get("instructions", ""),
                 placeholder="Summarize the problem, explain root cause, then list solution and lessons learned.",
                 height=160,
-                help="Describe the report format in plain language. The app converts it into structured sections.",
+                help="Describe the report format in plain language.",
             )
             tone = st.selectbox(
                 "Tone",
@@ -1531,7 +1531,7 @@ elif mode == "Settings":
                 help="Controls approximate detail level.",
             )
 
-            if st.button("Save summary template", key="save_summary_template", help="Parse and save this summary configuration."):
+            if st.button("Save summary template", key="save_summary_template", help="Save this report format."):
                 if not instructions.strip():
                     st.warning("Please enter summary instructions.")
                 else:
@@ -1580,7 +1580,7 @@ elif mode == "Settings":
                 "Select memory",
                 memories,
                 key="workspace_memory_access",
-                help="Review access, schema, and history for a memory.",
+                help="Review access, fields, and history for a memory.",
             )
             meta = mem_manager.get_memory_metadata(selected_mem)
             allowed = meta.get("allowed_user_ids", ["*"])
@@ -1613,19 +1613,19 @@ elif mode == "Settings":
                 st.success("Memory access updated.")
                 st.rerun()
 
-            with st.expander("Memory structure", expanded=False):
+            with st.expander("Memory fields", expanded=False):
                 schema = meta.get("schema") or {}
                 if schema:
                     st.dataframe(
                         pd.DataFrame([
-                            {"Column": col, "Type": details.get("type", ""), "Required": details.get("required", False)}
+                            {"Field": col, "Type": details.get("type", ""), "Required": details.get("required", False)}
                             for col, details in schema.items()
                         ]),
                         hide_index=True,
                         width="stretch",
                     )
                 else:
-                    st.info("No schema information stored yet. Save new records to refresh the structure.")
+                    st.info("No field information is stored yet. Save new records to refresh this view.")
 
             with st.expander("History", expanded=False):
                 audit_log = meta.get("audit_log") or []
