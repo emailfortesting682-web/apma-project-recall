@@ -1,9 +1,7 @@
 import os
 import json
-import base64
 from io import BytesIO
 from datetime import date
-from pathlib import Path
 
 import pandas as pd
 import streamlit as st
@@ -19,9 +17,6 @@ from modules.recall_engine import RecallEngine
 from modules.summary_parser import parse_summary_instructions
 from modules.summary_templates import load_templates, save_templates
 from modules.utils import ensure_data_dirs
-
-
-ASSET_DIR = Path(__file__).parent / "assets"
 
 
 try:
@@ -238,27 +233,6 @@ def inject_professional_theme():
             color: var(--apma-ink);
             font-size: 14px;
         }
-        .apma-visual {
-            background: #ffffff;
-            border: 1px solid var(--apma-border);
-            border-radius: 4px;
-            box-shadow: 0 1.6px 3.6px rgba(0,0,0,0.08), 0 0.3px 0.9px rgba(0,0,0,0.04);
-            padding: 14px;
-            height: 250px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            overflow: hidden;
-        }
-        .apma-visual.compact {
-            height: 190px;
-        }
-        .apma-visual img {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-            display: block;
-        }
         .apma-brand {
             display: flex;
             align-items: center;
@@ -367,22 +341,6 @@ def page_header(title: str, description: str):
 def guidance(text: str):
     with st.expander("Need help?", expanded=False):
         st.write(text)
-
-
-def visual_asset(filename: str, alt: str = "", compact: bool = False):
-    path = ASSET_DIR / filename
-    if not path.exists():
-        return
-    encoded = base64.b64encode(path.read_bytes()).decode("ascii")
-    css_class = "apma-visual compact" if compact else "apma-visual"
-    st.markdown(
-        f"""
-        <div class="{css_class}">
-            <img src="data:image/png;base64,{encoded}" alt="{alt}">
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
 
 
 def metric_card(title: str, value: str, note: str):
@@ -545,7 +503,6 @@ def permission_input(key_prefix: str):
 
 def render_download_panel(df: pd.DataFrame, summary: str):
     st.markdown("### Export report")
-    visual_asset("report_export.png", "Report export", compact=True)
     guidance("Choose whether the client needs the raw result table, the AI summary, or a complete report.")
 
     has_summary = bool(str(summary).strip())
@@ -700,7 +657,6 @@ if mode == "Dashboard":
             "Project memory, search, and reports in one workspace.",
         )
         st.info("Log in from the sidebar to continue.")
-        visual_asset("welcome_knowledge.png", "Knowledge workspace")
 
         c1, c2, c3 = st.columns(3)
         with c1:
@@ -778,7 +734,6 @@ if mode == "Dashboard":
             )
     else:
         if st.session_state.get("user"):
-            visual_asset("empty_memory.png", "No saved memories", compact=True)
             guidance("No memories found yet. Use Upload project file or Add manual record to create the first project memory.")
         else:
             guidance("Log in from the sidebar to create and search project memories.")
@@ -791,7 +746,6 @@ elif mode == "Data Upload":
     )
     require_login()
     guidance("Create a new memory from any structured file, or append to an existing memory using its saved column structure.")
-    visual_asset("upload_data.png", "Upload data", compact=True)
 
     memories = mem_manager.list_memories()
     file_mem_mode = st.radio(
@@ -980,7 +934,6 @@ elif mode == "Manual Entry":
     )
     require_login()
     guidance("Add one or more rows to the pending list, review them, then save the batch to a memory.")
-    visual_asset("manual_entry.png", "Manual entry", compact=True)
 
     config = load_config()
     memories = mem_manager.list_memories()
@@ -1111,7 +1064,6 @@ elif mode == "Search & Insights":
     )
     require_login()
     guidance("Use semantic search for natural-language questions. Use structured filters when you know the exact field to inspect.")
-    visual_asset("search_insights.png", "Search insights", compact=True)
 
     user_id = st.session_state["user"]["id"]
     templates = load_templates(user_id=user_id)
@@ -1286,7 +1238,6 @@ elif mode == "Settings":
         "Configure fields, summaries, and system status.",
     )
     require_login()
-    visual_asset("settings_workspace.png", "Workspace settings", compact=True)
 
     fields_tab, templates_tab, system_tab = st.tabs(["Manual fields", "Summary templates", "Workspace"])
 
